@@ -101,3 +101,4 @@ Open Neo4j Browser or Cypher Shell and run:
 
 ### Full Documentation
 Review the comprehensive visual models in [`docs/ER_DIAGRAM_AND_RELATIONAL_SCHEMA.md`](ER_DIAGRAM_AND_RELATIONAL_SCHEMA.md).
+

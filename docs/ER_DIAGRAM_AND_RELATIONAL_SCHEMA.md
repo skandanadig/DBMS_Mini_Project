@@ -316,3 +316,4 @@ flowchart TD
 
 4. **Boyce-Codd Normal Form (BCNF):**
    - For every functional dependency $X \rightarrow Y$, $X$ is a superkey. In `applications`, the candidate and job pair is guarded by `UNIQUE(job_id, candidate_id)`, preventing duplicate submissions.
+
