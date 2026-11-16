@@ -16,7 +16,8 @@ This folder contains the complete, production-ready database definitions for **S
 | [`mysql/05_performance.sql`](mysql/05_performance.sql) | `EXPLAIN ANALYZE` with vs without each index on 50k jobs / 100k applications; FULLTEXT vs `LIKE` | Performance |
 | [`mysql/06_tests.sql`](mysql/06_tests.sql) | 49 automated PASS/FAIL tests: constraints, triggers, procedures, rollback, outbox | Test suite |
 | [`docs/CONTRACTS.md`](docs/CONTRACTS.md) | Shared API/DB/graph contracts and Member A / Member B file ownership | Team agreement |
-| [`neo4j/schema_and_seed.cql`](neo4j/schema_and_seed.cql) | Cypher constraints, Graph Nodes, Relationships (`[:HAS_SKILL]`, `[:REQUIRES_SKILL]`, `[:RELATED_TO]`), and 4 Advanced graph queries | Graph (NoSQL) |
+| [`neo4j/schema_and_seed.cql`](neo4j/schema_and_seed.cql) | Constraints/indexes; idempotent `MERGE` seed mirrored from MySQL (skills, companies, candidates, jobs, `HAS_SKILL`, `REQUIRES_SKILL`, `OFFERED_BY`) plus graph-only `RELATED_TO`, `SUBSKILL_OF`, `WORKED_AT`, `CONNECTED_TO` | Graph (NoSQL) |
+| [`neo4j/queries.cql`](neo4j/queries.cql) | 7 parameterised queries: skill gap, related-skill credit, graph ranking, referral path, job recommendations, supply/demand aggregation, learn-next | Graph (NoSQL) |
 
 ---
 
@@ -37,7 +38,9 @@ This folder contains the complete, production-ready database definitions for **S
 | **SQL Concept 5: Indexing** | Composite B-tree indexes + `EXPLAIN ANALYZE` in `05_performance.sql` | e.g. job feed 0.16 ms with index vs 16 ms full scan + filesort on 50k rows. |
 | **SQL Concept 6: Full-text search** | `ft_jobs_text`, `ft_candidates_profile` | Natural-language and boolean `MATCH ... AGAINST` (Section H). |
 | **MySQL → Neo4j sync** | `graph_sync_outbox` + outbox triggers | Transactional outbox; events written in the same transaction as the change (eventual consistency). |
-| **NoSQL Advanced Concept: Graph Traversal** | `neo4j/schema_and_seed.cql` | 2-hop related skill expansion, weighted candidate ranking, missing skill-gap analysis, and network referral paths. |
+| **NoSQL Concept 1: Graph Traversal** | `neo4j/queries.cql` Q2–Q5 | Variable-length `RELATED_TO*1..2` / `SUBSKILL_OF*1..2` traversal with path-weight products, `shortestPath` referrals, graph-enhanced ranking. |
+| **NoSQL Concept 2: Aggregation** | `neo4j/queries.cql` Q6–Q7 | `COUNT {}` / `COLLECT {}` subqueries, skill supply vs demand, category roll-up. |
+| **SQL vs Graph consistency** | Q3 `exactScore` vs MySQL `fn_match_score` | Identical for all 240 open-job × candidate pairs; `graphScore` adds credit for related/implied skills. |
 
 ---
 
@@ -77,9 +80,15 @@ source mysql/03_queries_and_tests.sql;
 ```
 
 ### 2. Neo4j Execution
-You can run this using **Neo4j Desktop**, **Neo4j Browser** (usually at `http://localhost:7474`), or **cypher-shell**:
+With Docker (the `neo4j/` folder is mounted at `/scripts`):
 
-1. Open **Neo4j Browser**.
-2. Copy and paste the contents of [`neo4j/schema_and_seed.cql`](neo4j/schema_and_seed.cql).
-3. Execute the statements to create constraints, populate graph nodes and relationships.
-4. Run each of the 4 demo Cypher queries in Section 7 to see graph visualization of skill matching and referrals.
+```bash
+# Seed the graph (idempotent - safe to re-run)
+docker compose exec neo4j sh -c 'cypher-shell -u neo4j -p "$SM_NEO4J_PASSWORD" -f /scripts/schema_and_seed.cql'
+# Run all demo queries
+docker compose exec neo4j sh -c 'cypher-shell -u neo4j -p "$SM_NEO4J_PASSWORD" -f /scripts/queries.cql'
+```
+
+Or open **Neo4j Browser** at `http://localhost:7474` (user `neo4j`, password from `.env`), paste
+[`neo4j/schema_and_seed.cql`](neo4j/schema_and_seed.cql), then run the `:param` lines and any query from
+[`neo4j/queries.cql`](neo4j/queries.cql) to see the graph visualisation.
