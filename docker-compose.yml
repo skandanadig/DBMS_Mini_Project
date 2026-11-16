@@ -1,0 +1,66 @@
+# SkillMatch local database stack: MySQL 8 (relational) + Neo4j 5 (graph)
+# Usage:
+#   cp .env.example .env      # then edit passwords
+#   docker compose up -d
+#   docker compose ps         # both services should be "healthy"
+# Reset everything (re-runs MySQL init scripts):
+#   docker compose down -v && docker compose up -d
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: skillmatch-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_USER: ${MYSQL_USER:?set MYSQL_USER in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      # Fixed name: SQL scripts use `USE skillmatch_db;`
+      MYSQL_DATABASE: skillmatch_db
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # Triggers/functions are created by a non-SUPER user when binlog is on
+      - --log-bin-trust-function-creators=1
+    ports:
+      # Host port 3307 by default so it doesn't clash with a locally installed MySQL on 3306
+      - "${MYSQL_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Only schema + seed run at container init (alphabetical order).
+      # Demo/test scripts (03+) are run manually so they don't mutate seed data.
+      - ./mysql/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./mysql/02_seed_data.sql:/docker-entrypoint-initdb.d/02_seed_data.sql:ro
+      - ./mysql:/scripts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  neo4j:
+    image: neo4j:5
+    container_name: skillmatch-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env (min 8 chars)}
+      # Copy used only by the healthcheck / cypher-shell. Must NOT start with NEO4J_,
+      # because the image turns every NEO4J_* variable into a neo4j.conf setting.
+      SM_NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    volumes:
+      - neo4j_data:/data
+      - ./neo4j:/scripts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$$SM_NEO4J_PASSWORD\" 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
+
+volumes:
+  mysql_data:
+  neo4j_data:

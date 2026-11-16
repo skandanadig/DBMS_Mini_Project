@@ -56,10 +56,10 @@ Instead of being a standard CRUD application, SkillMatch combines:
 ## 5. Advanced Database Concepts Demonstrated (PES Rubric Section 7)
 
 ### Concept 1: ACID Transactions (`sp_submit_application`)
-Encapsulated in `mysql/schema.sql`, lines 304–380. Executes `START TRANSACTION`, verifies that the candidate has an uploaded resume, confirms that the target job is in `OPEN` status, prevents duplicates, inserts into `applications`, generates an initial record in `application_audit_logs`, and issues `COMMIT` or `ROLLBACK` on `SQLEXCEPTION`.
+Encapsulated in `mysql/01_schema.sql`, lines 304–380. Executes `START TRANSACTION`, verifies that the candidate has an uploaded resume, confirms that the target job is in `OPEN` status, prevents duplicates, inserts into `applications`, generates an initial record in `application_audit_logs`, and issues `COMMIT` or `ROLLBACK` on `SQLEXCEPTION`.
 
 ### Concept 2: Views for Analytics (`vw_recruiter_pipeline`, `vw_candidate_applications`, `vw_top_demanded_skills`)
-Encapsulated in `mysql/schema.sql`, lines 198–255. Demonstrates multi-table inner/outer joins with `GROUP BY`, `HAVING`, conditional `SUM(CASE ...)`, and window-like aggregations for real-time dashboards.
+Encapsulated in `mysql/01_schema.sql`, lines 198–255. Demonstrates multi-table inner/outer joins with `GROUP BY`, `HAVING`, conditional `SUM(CASE ...)`, and window-like aggregations for real-time dashboards.
 
 ### Concept 3: Active Business Triggers (`trg_prevent_apply_closed_job`, `trg_audit_application_status_update`)
 - `trg_prevent_apply_closed_job`: Intercepts `BEFORE INSERT` on `applications`, signals SQLSTATE `'45000'` with an error message if the job status is not `OPEN`.
@@ -88,9 +88,9 @@ Neo4j Cypher queries in `neo4j/schema_and_seed.cql`:
 ### MySQL
 ```bash
 mysql -u root -p
-source mysql/schema.sql;
-source mysql/seed_data.sql;
-source mysql/queries_and_tests.sql;
+source mysql/01_schema.sql;
+source mysql/02_seed_data.sql;
+source mysql/03_queries_and_tests.sql;
 ```
 
 ### Neo4j

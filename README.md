@@ -8,9 +8,11 @@ This folder contains the complete, production-ready database definitions for **S
 
 | File | Purpose | Paradigm |
 | :--- | :--- | :--- |
-| [`mysql/schema.sql`](mysql/schema.sql) | Complete DDL, Primary/Foreign keys, Constraints, Indexes, Views, Triggers, Stored Procedures, and Transactions | Relational (SQL) |
-| [`mysql/seed_data.sql`](mysql/seed_data.sql) | Realistic seed data (Users, Candidates, Recruiters, Companies, Skills, Jobs, Applications, Audit Logs) | Relational (SQL) |
-| [`mysql/queries_and_tests.sql`](mysql/queries_and_tests.sql) | DML operations, Multi-table JOINs, GROUP BY/HAVING, Subqueries, Stored Procedure calls, and Trigger error tests | Test Suite / Demo |
+| [`docker-compose.yml`](docker-compose.yml) | Local MySQL 8 + Neo4j 5 stack (schema + seed auto-load on first start) | Infra |
+| [`mysql/01_schema.sql`](mysql/01_schema.sql) | Complete DDL, Primary/Foreign keys, Constraints, Indexes, Views, Triggers, Stored Procedures, and Transactions | Relational (SQL) |
+| [`mysql/02_seed_data.sql`](mysql/02_seed_data.sql) | Realistic seed data (Users, Candidates, Recruiters, Companies, Skills, Jobs, Applications, Audit Logs) | Relational (SQL) |
+| [`mysql/03_queries_and_tests.sql`](mysql/03_queries_and_tests.sql) | DML operations, Multi-table JOINs, GROUP BY/HAVING, Subqueries, Stored Procedure calls, and Trigger error tests | Test Suite / Demo |
+| [`docs/CONTRACTS.md`](docs/CONTRACTS.md) | Shared API/DB/graph contracts and Member A / Member B file ownership | Team agreement |
 | [`neo4j/schema_and_seed.cql`](neo4j/schema_and_seed.cql) | Cypher constraints, Graph Nodes, Relationships (`[:HAS_SKILL]`, `[:REQUIRES_SKILL]`, `[:RELATED_TO]`), and 4 Advanced graph queries | Graph (NoSQL) |
 
 ---
@@ -20,7 +22,7 @@ This folder contains the complete, production-ready database definitions for **S
 | Rubric Requirement | Where It Is Implemented | Description |
 | :--- | :--- | :--- |
 | **SQL + NoSQL Paradigms** | MySQL + Neo4j | MySQL handles ACID transactions, relational integrity, auth, applications; Neo4j handles multi-hop skill ontology and recommendation graph. |
-| **ER Diagram & Relational Schema** | [`mysql/schema.sql`](mysql/schema.sql) | Fully normalized (3NF), Primary & Foreign keys with `ON DELETE CASCADE/RESTRICT`, check constraints. |
+| **ER Diagram & Relational Schema** | [`mysql/01_schema.sql`](mysql/01_schema.sql) | Fully normalized (3NF), Primary & Foreign keys with `ON DELETE CASCADE/RESTRICT`, check constraints. |
 | **DDL Statements** | `CREATE`, `ALTER`, `DROP`, Constraints, Indexes | See sections 0-10 of `schema.sql`. |
 | **DML Operations** | `INSERT`, `UPDATE`, `DELETE`, `SELECT` | Tested in Section A of `queries_and_tests.sql`. |
 | **JOIN, GROUP BY, HAVING, Subqueries** | Sections B & C of `queries_and_tests.sql` | Mandatory skills checker subquery, salary threshold aggregations. |
@@ -35,7 +37,20 @@ This folder contains the complete, production-ready database definitions for **S
 
 ## 🚀 Execution Instructions
 
-### 1. MySQL Execution
+### 0. Start the databases (Docker — recommended)
+```bash
+cp .env.example .env          # edit the passwords
+docker compose up -d          # MySQL runs 01_schema.sql + 02_seed_data.sql automatically on first start
+docker compose ps             # wait until both services show "healthy"
+
+# Run the demo/test queries inside the container
+docker compose exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" < /scripts/03_queries_and_tests.sql'
+
+# Reset everything (re-runs init scripts)
+docker compose down -v && docker compose up -d
+```
+
+### 1. MySQL Execution (without Docker)
 You can run these scripts using **MySQL Workbench**, **phpMyAdmin**, or the **MySQL CLI**:
 
 ```bash
@@ -43,13 +58,13 @@ You can run these scripts using **MySQL Workbench**, **phpMyAdmin**, or the **My
 mysql -u root -p
 
 # 1. Run schema DDL (creates database, tables, triggers, procedures, views)
-source mysql/schema.sql;
+source mysql/01_schema.sql;
 
 # 2. Populate realistic seed data
-source mysql/seed_data.sql;
+source mysql/02_seed_data.sql;
 
 # 3. Test verification queries
-source mysql/queries_and_tests.sql;
+source mysql/03_queries_and_tests.sql;
 ```
 
 ### 2. Neo4j Execution
