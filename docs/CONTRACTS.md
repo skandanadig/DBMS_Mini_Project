@@ -22,23 +22,28 @@ Anything listed here may only change if both members agree, and the change is re
 The cookie is `SameSite=Lax`, `Secure` in production, and lasts 8 hours.
 
 ```ts
-// JWT payload
+// JWT payload (iss "skillmatch", aud "skillmatch-web")
 type SessionClaims = {
-  sub: number;                          // users.user_id
+  sub: string;                          // users.user_id as a string (JWT spec)
   role: 'Candidate' | 'Recruiter' | 'Admin';
   name: string;
   iat: number; exp: number;
 };
+// What route handlers receive (lib/contracts.ts)
+type SessionUser = { userId: number; role: Role; name: string };
 ```
 
 **Authorization rule:** every protected route handler calls `requireAuth(req, [roles])` (in `web/lib/auth.ts`), and then runs its ownership check against MySQL.
-`middleware.ts` only redirects UI pages. It is **not** a security boundary.
+`requireAuth` also re-reads the user from MySQL, so a token for a deleted user, or one whose role no longer matches, is rejected with 401.
+`web/proxy.ts` (Next.js 16's replacement for `middleware.ts`) only redirects UI pages. It is **not** a security boundary.
 
 | Helper (`web/lib/authz.ts`) | Rule (checked with a SQL lookup on every call) |
 | :--- | :--- |
-| `assertRecruiterOwnsJob(recruiterId, jobId)` | `jobs.recruiter_id = recruiterId` |
-| `assertRecruiterOwnsApplication(recruiterId, applicationId)` | `applications → jobs.recruiter_id = recruiterId` |
-| `assertCandidateSelf(session, candidateId)` | `session.sub = candidateId` (an Admin bypasses this check) |
+| `assertRecruiterOwnsJob(user, jobId)` | `jobs.recruiter_id = user.userId`; 404 if the job is missing |
+| `assertRecruiterOwnsApplication(user, applicationId)` | `applications → jobs.recruiter_id = user.userId`; 404 if missing |
+| `assertCandidateSelf(user, candidateId)` | `user.userId = candidateId` |
+
+An Admin passes every ownership check. A Candidate never passes a recruiter check.
 
 ## 2. API Conventions
 
@@ -69,7 +74,8 @@ type SessionClaims = {
 | `POST /api/auth/register` | public | Role forced to `Candidate`; any `role` in the body is ignored | `{name,email,password}` → `{user}` | A |
 | `POST /api/auth/login` | public | n/a | `{email,password}` → `{user}` + sets cookie | A |
 | `POST /api/auth/logout` | any | n/a | none → `204` | A |
-| `GET /api/auth/me` | any | n/a | → `{user}` | A |
+| `GET /api/auth/me` | any | n/a | → `{user, profile}` (role-specific profile) | A |
+| `GET /api/health` | public | n/a | → `{status, mysql, neo4j}`; 503 if either database is down | A |
 | `GET /api/jobs` | public | n/a | `?q=&location=&type=&minSalary=&skillId=&page=` → paged `JobSummary` | B |
 | `GET /api/jobs/:id` | public | n/a | → `JobDetail` (incl. required skills) | B |
 | `GET /api/jobs/:id/match` | Candidate | self | → `{score, matched[], missing[], related[]}` (SQL `fn_match_score` + Neo4j skill gap) | B |
@@ -177,14 +183,14 @@ How it works:
 | `neo4j/schema_and_seed.cql`, `neo4j/queries.cql` | B |
 | `docs/CONTRACTS.md` | A + B (changes need both) |
 | `web/package.json`, `web/next.config.*`, `web/tsconfig.json`, `web/vitest.config.ts` | A |
-| `web/lib/db.ts`, `web/lib/procedures.ts`, `web/lib/auth.ts`, `web/lib/authz.ts`, `web/lib/errors.ts`, `web/lib/contracts.ts`, `web/middleware.ts` | A |
-| `web/lib/neo4j.ts`, `web/lib/graph-queries.ts`, `web/scripts/sync-graph.ts` | B |
+| `web/lib/db.ts`, `web/lib/procedures.ts`, `web/lib/auth.ts`, `web/lib/authz.ts`, `web/lib/session.ts`, `web/lib/server-session.ts`, `web/lib/errors.ts`, `web/lib/contracts.ts`, `web/lib/env.ts`, `web/lib/load-root-env.ts`, `web/proxy.ts` | A |
+| `web/lib/neo4j.ts` (driver; created by A in Phase 3, extended by B), `web/lib/graph-queries.ts`, `web/scripts/sync-graph.ts` | B |
 | `web/app/(auth)/**`, `web/app/api/auth/**` | A |
 | `web/app/recruiter/**`, `web/app/api/recruiter/**` | A |
 | `web/app/jobs/**`, `web/app/me/**`, `web/app/api/jobs/**`, `web/app/api/me/**` | B |
 | `web/app/admin/**`, `web/app/api/admin/**` | B |
 | `web/components/ui/**` (shared primitives) | A creates them; B may add to them |
-| `web/tests/auth.test.ts`, `constraints.test.ts` | A |
+| `web/tests/auth.test.ts`, `db.test.ts`, `constraints.test.ts`, `helpers.ts` | A |
 | `web/tests/procedures.test.ts`, `rollback.test.ts`, `sync.test.ts` | B |
 | `docs/PROJECT_REPORT.md`, `README.md` | A + B |
 | `docs/ER_DIAGRAM_AND_RELATIONAL_SCHEMA.md` | A |
@@ -196,3 +202,4 @@ How it works:
 | :--- | :--- | :--- |
 | 2026-11-16 | Initial contracts (Phase 0) | A, B |
 | 2026-11-16 | Phase 2: `Company.industry` and `WORKED_AT.since` added. Graph scoring rule fixed: `exactScore` must equal MySQL `fn_match_score`; `graphScore` adds implied credit 0.8 (`SUBSKILL_OF`) or related credit 0.5 × path weight (`RELATED_TO`) for missing skills | A, B |
+| 2026-11-16 | Phase 3 (Next.js 16): `middleware.ts` → `proxy.ts`. JWT `sub` is a string. `authz` helpers take the `SessionUser`. New A-owned files: `session.ts`, `server-session.ts`, `env.ts`, `load-root-env.ts`, `tests/db.test.ts`. `lib/neo4j.ts` was created by A for `/api/health`. Added public `GET /api/health`. | A, B |

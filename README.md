@@ -17,6 +17,7 @@ This folder contains the complete, production-ready database definitions for **S
 | [`mysql/06_tests.sql`](mysql/06_tests.sql) | 49 automated PASS/FAIL tests: constraints, triggers, procedures, rollback, outbox | Test suite |
 | [`docs/CONTRACTS.md`](docs/CONTRACTS.md) | Shared API/DB/graph contracts and Member A / Member B file ownership | Team agreement |
 | [`neo4j/schema_and_seed.cql`](neo4j/schema_and_seed.cql) | Constraints/indexes; idempotent `MERGE` seed mirrored from MySQL (skills, companies, candidates, jobs, `HAS_SKILL`, `REQUIRES_SKILL`, `OFFERED_BY`) plus graph-only `RELATED_TO`, `SUBSKILL_OF`, `WORKED_AT`, `CONNECTED_TO` | Graph (NoSQL) |
+| [`web/`](web/) | Next.js 16 app: API route handlers, JWT auth with RBAC in every route, MySQL pool + stored-procedure helper, Neo4j driver, Vitest integration tests | Web / API |
 | [`neo4j/queries.cql`](neo4j/queries.cql) | 7 parameterised queries: skill gap, related-skill credit, graph ranking, referral path, job recommendations, supply/demand aggregation, learn-next | Graph (NoSQL) |
 
 ---
@@ -92,3 +93,24 @@ docker compose exec neo4j sh -c 'cypher-shell -u neo4j -p "$SM_NEO4J_PASSWORD" -
 Or open **Neo4j Browser** at `http://localhost:7474` (user `neo4j`, password from `.env`), paste
 [`neo4j/schema_and_seed.cql`](neo4j/schema_and_seed.cql), then run the `:param` lines and any query from
 [`neo4j/queries.cql`](neo4j/queries.cql) to see the graph visualisation.
+
+### 3. Web app (Next.js 16)
+
+Requirements: **Node.js ≥ 22.12**, the databases running (step 0), and a real `JWT_SECRET` in the root `.env`:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # paste into .env as JWT_SECRET=...
+```
+
+```bash
+cd web
+npm install          # web/.npmrc sets legacy-peer-deps (works around an npm 10.9 crash on vitest's optional peers)
+npm run dev          # http://localhost:3000
+npm test             # Vitest integration tests against the Docker MySQL (34 tests)
+npm run typecheck
+npm run build && npm start
+```
+
+The app reads the **same root `.env`** as docker compose: there is no separate `web/.env`.
+Health check: `http://localhost:3000/api/health` (200 when MySQL and Neo4j are both reachable).
+Demo logins (password `Password@123`): `admin@skillmatch.io`, `sarah.j@techcorp.com` (recruiter), `rahul.sharma@gmail.com` (candidate).
