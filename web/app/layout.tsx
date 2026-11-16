@@ -15,8 +15,10 @@ export const metadata: Metadata = {
 const NAV_BY_ROLE: Record<Role, Array<{ href: string; label: string }>> = {
   Candidate: [
     { href: "/jobs", label: "Jobs" },
+    { href: "/me/recommendations", label: "For you" },
     { href: "/me/applications", label: "My applications" },
     { href: "/me/skills", label: "My skills" },
+    { href: "/me/profile", label: "Profile" },
   ],
   Recruiter: [
     { href: "/recruiter", label: "Dashboard" },
