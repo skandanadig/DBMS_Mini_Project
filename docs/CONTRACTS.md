@@ -184,7 +184,7 @@ How it works:
 | `docs/CONTRACTS.md` | A + B (changes need both) |
 | `web/package.json`, `web/next.config.*`, `web/tsconfig.json`, `web/vitest.config.ts` | A |
 | `web/lib/db.ts`, `web/lib/procedures.ts`, `web/lib/auth.ts`, `web/lib/authz.ts`, `web/lib/session.ts`, `web/lib/server-session.ts`, `web/lib/errors.ts`, `web/lib/contracts.ts`, `web/lib/env.ts`, `web/lib/load-root-env.ts`, `web/proxy.ts` | A |
-| `web/lib/neo4j.ts` (driver; created by A in Phase 3, extended by B), `web/lib/graph-queries.ts`, `web/scripts/sync-graph.ts` | B |
+| `web/lib/neo4j.ts` (driver; created by A in Phase 3, extended by B), `web/lib/graph-queries.ts`, `web/lib/graph-sync.ts`, `web/lib/sync-trigger.ts`, `web/scripts/sync-graph.ts`, `docs/GRAPH_SYNC.md` | B |
 | `web/app/(auth)/**`, `web/app/api/auth/**` | A |
 | `web/app/recruiter/**`, `web/app/api/recruiter/**` | A |
 | `web/app/jobs/**`, `web/app/me/**`, `web/app/api/jobs/**`, `web/app/api/me/**` | B |
@@ -203,3 +203,4 @@ How it works:
 | 2026-11-16 | Initial contracts (Phase 0) | A, B |
 | 2026-11-16 | Phase 2: `Company.industry` and `WORKED_AT.since` added. Graph scoring rule fixed: `exactScore` must equal MySQL `fn_match_score`; `graphScore` adds implied credit 0.8 (`SUBSKILL_OF`) or related credit 0.5 × path weight (`RELATED_TO`) for missing skills | A, B |
 | 2026-11-16 | Phase 3 (Next.js 16): `middleware.ts` → `proxy.ts`. JWT `sub` is a string. `authz` helpers take the `SessionUser`. New A-owned files: `session.ts`, `server-session.ts`, `env.ts`, `load-root-env.ts`, `tests/db.test.ts`. `lib/neo4j.ts` was created by A for `/api/health`. Added public `GET /api/health`. | A, B |
+| 2026-11-16 | Phase 4: the worker is `processOutbox()` in `lib/graph-sync.ts`, guarded by MySQL `GET_LOCK('skillmatch_graph_sync')`. It stops at the first failure and parks an event as FAILED after 5 attempts. Company data is read from MySQL when a JOB event is applied. `JOB_SKILL.is_mandatory` arrives as 1/0 in payloads. Routes that change mirrored data must call `requestGraphSync()` from `lib/sync-trigger.ts` after commit. Full design: `docs/GRAPH_SYNC.md`. | A, B |

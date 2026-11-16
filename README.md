@@ -38,7 +38,7 @@ This folder contains the complete, production-ready database definitions for **S
 | **SQL Concept 4: Stored Procedures & Functions** | `sp_submit_application`, `sp_update_application_status`, `sp_get_recruiter_analytics`, `fn_match_score` | OUT parameters, authorization checks, multiple result sets, weighted scoring function. |
 | **SQL Concept 5: Indexing** | Composite B-tree indexes + `EXPLAIN ANALYZE` in `05_performance.sql` | e.g. job feed 0.16 ms with index vs 16 ms full scan + filesort on 50k rows. |
 | **SQL Concept 6: Full-text search** | `ft_jobs_text`, `ft_candidates_profile` | Natural-language and boolean `MATCH ... AGAINST` (Section H). |
-| **MySQL → Neo4j sync** | `graph_sync_outbox` + outbox triggers | Transactional outbox; events written in the same transaction as the change (eventual consistency). |
+| **MySQL → Neo4j sync** | `graph_sync_outbox` + triggers, worker `web/lib/graph-sync.ts` | Transactional outbox, single worker (advisory lock), ordered and idempotent replay, poison events parked as FAILED, full rebuild/verify. See [`docs/GRAPH_SYNC.md`](docs/GRAPH_SYNC.md). |
 | **NoSQL Concept 1: Graph Traversal** | `neo4j/queries.cql` Q2–Q5 | Variable-length `RELATED_TO*1..2` / `SUBSKILL_OF*1..2` traversal with path-weight products, `shortestPath` referrals, graph-enhanced ranking. |
 | **NoSQL Concept 2: Aggregation** | `neo4j/queries.cql` Q6–Q7 | `COUNT {}` / `COLLECT {}` subqueries, skill supply vs demand, category roll-up. |
 | **SQL vs Graph consistency** | Q3 `exactScore` vs MySQL `fn_match_score` | Identical for all 240 open-job × candidate pairs; `graphScore` adds credit for related/implied skills. |
@@ -106,7 +106,10 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # pas
 cd web
 npm install          # web/.npmrc sets legacy-peer-deps (works around an npm 10.9 crash on vitest's optional peers)
 npm run dev          # http://localhost:3000
-npm test             # Vitest integration tests against the Docker MySQL (34 tests)
+npm test             # Vitest integration tests against the Docker MySQL + Neo4j (42 tests)
+npm run sync:graph   # apply pending MySQL changes to Neo4j, then verify both stores match
+npm run sync:graph -- --watch    # keep syncing every 5 s (handy during a demo)
+npm run sync:graph -- --full     # rebuild mirrored graph data from MySQL, then sync
 npm run typecheck
 npm run build && npm start
 ```

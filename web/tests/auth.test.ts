@@ -158,7 +158,10 @@ describe("GET /api/auth/me + session validation", () => {
     const email = testEmail("deleted");
     const reg = await register(makeRequest("/api/auth/register", { method: "POST", body: { name: "Soon Gone", email, password: "longenough1" } }));
     const token = sessionTokenFrom(reg)!;
+    const { user } = await reg.json();
     await query("DELETE FROM users WHERE email = ?", [email]);
+    // the user is gone, so cleanupTestUsers() can no longer find its outbox events
+    await query("DELETE FROM graph_sync_outbox WHERE entity_type = 'CANDIDATE' AND entity_id = ?", [String(user.userId)]);
     const res = await me(makeRequest("/api/auth/me", { token }));
     expect(res.status).toBe(401);
   });
