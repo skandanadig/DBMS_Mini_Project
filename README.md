@@ -14,7 +14,7 @@ This folder contains the complete, production-ready database definitions for **S
 | [`mysql/03_queries_and_tests.sql`](mysql/03_queries_and_tests.sql) | DML, JOINs, GROUP BY/HAVING, subqueries, views, procedures, window functions, CTEs, full-text search, SQL ranking | Demo queries |
 | [`mysql/04_alter_demo.sql`](mysql/04_alter_demo.sql) | `ALTER TABLE` / `ALTER VIEW` / `RENAME` / `DROP` on the live schema (self-reverting) | DDL demo |
 | [`mysql/05_performance.sql`](mysql/05_performance.sql) | `EXPLAIN ANALYZE` with vs without each index on 50k jobs / 100k applications; FULLTEXT vs `LIKE` | Performance |
-| [`mysql/06_tests.sql`](mysql/06_tests.sql) | 49 automated PASS/FAIL tests: constraints, triggers, procedures, rollback, outbox | Test suite |
+| [`mysql/06_tests.sql`](mysql/06_tests.sql) | 51 automated PASS/FAIL tests: constraints, triggers, procedures, rollback, outbox | Test suite |
 | [`docs/CONTRACTS.md`](docs/CONTRACTS.md) | Shared API/DB/graph contracts and Member A / Member B file ownership | Team agreement |
 | [`neo4j/schema_and_seed.cql`](neo4j/schema_and_seed.cql) | Constraints/indexes; idempotent `MERGE` seed mirrored from MySQL (skills, companies, candidates, jobs, `HAS_SKILL`, `REQUIRES_SKILL`, `OFFERED_BY`) plus graph-only `RELATED_TO`, `SUBSKILL_OF`, `WORKED_AT`, `CONNECTED_TO` | Graph (NoSQL) |
 | [`web/`](web/) | Next.js 16 app: API route handlers, JWT auth with RBAC in every route, MySQL pool + stored-procedure helper, Neo4j driver, Vitest integration tests | Web / API |
@@ -31,7 +31,7 @@ This folder contains the complete, production-ready database definitions for **S
 | **DDL Statements** | `CREATE` / `DROP` in `01_schema.sql`, `ALTER` / `RENAME` / `DROP` in `04_alter_demo.sql` | Constraints, indexes, views. |
 | **DML Operations** | `INSERT`, `UPDATE`, `DELETE`, `SELECT` | Section A of `03_queries_and_tests.sql`. |
 | **JOIN, GROUP BY, HAVING, Subqueries** | Sections B, C, G of `03_queries_and_tests.sql` | Relational division, correlated subqueries, window functions, CTEs (incl. recursive). |
-| **Data validation at DB level** | CHECK, UNIQUE, FK, ENUM, triggers | Verified by `06_tests.sql` (49 PASS/FAIL tests). |
+| **Data validation at DB level** | CHECK, UNIQUE, FK, ENUM, triggers | Verified by `06_tests.sql` (51 PASS/FAIL tests). |
 | **SQL Concept 1: Transactions** | `sp_submit_application` | `START TRANSACTION`, `SELECT ... FOR UPDATE` on the job row, explicit `ROLLBACK` paths, exit handlers. |
 | **SQL Concept 2: Views** | `vw_job_listings`, `vw_recruiter_pipeline`, `vw_candidate_applications`, `vw_top_demanded_skills`, `vw_job_match_leaderboard` | Dashboards with joins, aggregation and `RANK()` window function. |
 | **SQL Concept 3: Triggers** | State machine, role/subtype integrity, insert defaults, audit trail, outbox | Business rules enforced in the database; audit metadata read from the row (pool-safe, no session variables). |
@@ -106,7 +106,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # pas
 cd web
 npm install          # web/.npmrc sets legacy-peer-deps (works around an npm 10.9 crash on vitest's optional peers)
 npm run dev          # http://localhost:3000
-npm test             # Vitest integration tests against the Docker MySQL + Neo4j (70 tests)
+npm test             # Vitest integration tests against the Docker MySQL + Neo4j (86 tests)
 npm run sync:graph   # apply pending MySQL changes to Neo4j, then verify both stores match
 npm run sync:graph -- --watch    # keep syncing every 5 s (handy during a demo)
 npm run sync:graph -- --full     # rebuild mirrored graph data from MySQL, then sync
@@ -120,3 +120,6 @@ Demo logins (password `Password@123`): `admin@skillmatch.io`, `sarah.j@techcorp.
 
 **Candidate features** (sign in as `rahul.sharma@gmail.com` or `meera.joshi@gmail.com`):
 `/jobs` (full-text search, filters, sort by personal match) · `/jobs/[id]` (SQL vs graph match score, skill-gap table, related-skill paths, referral paths, apply through `sp_submit_application`) · `/me/recommendations` (Neo4j job recommendations and "learn next") · `/me/applications` (status timeline from the audit trigger) · `/me/skills` · `/me/profile` (a resume link is required to apply).
+
+**Recruiter features** (sign in as `sarah.j@techcorp.com`):
+`/recruiter` (KPIs, per-job pipeline, hiring funnel from the audit trail, hard-to-fill skills) · `/recruiter/jobs/new` and `/recruiter/jobs/[id]/edit` (posting and skills in one transaction; MySQL CHECKs and triggers validate it) · `/recruiter/jobs/[id]/applicants` (applicants ranked with `RANK()`, status changes through `sp_update_application_status` with remarks, and the **SQL vs Neo4j ranking side by side**).
