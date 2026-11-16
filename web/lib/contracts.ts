@@ -212,3 +212,108 @@ export interface RecommendationsResponse {
   jobs: Array<{ jobId: number; title: string; company: string; exactScore: number; graphScore: number }>;
   learnNext: Array<{ skill: string; openJobsNeedingIt: number; proximity: number; builtOnExisting: boolean; priority: number }>;
 }
+
+// ---- Recruiter features (Member A, Phase 6) --------------------------------
+/**
+ * Mirrors trg_validate_status_transition (MySQL is the enforcer; the UI only
+ * uses this to offer valid next steps).
+ */
+export const NEXT_STATUSES: Record<ApplicationStatus, ApplicationStatus[]> = {
+  APPLIED: ["UNDER_REVIEW", "REJECTED"],
+  UNDER_REVIEW: ["INTERVIEW_SCHEDULED", "REJECTED"],
+  INTERVIEW_SCHEDULED: ["OFFERED", "REJECTED"],
+  OFFERED: [],
+  REJECTED: [],
+};
+
+export const JobSkillInput = z.object({
+  skillId: PositiveId,
+  requiredLevel: ProficiencyLevel,
+  mandatory: z.boolean(),
+});
+
+/**
+ * Create/update a posting. Business ranges (salary_max >= salary_min >= 0,
+ * title >= 3 chars, archived is terminal) are enforced by MySQL CHECK
+ * constraints and triggers - zod only bounds types and sizes.
+ */
+export const JobInput = z.object({
+  title: z.string().trim().min(1).max(150),
+  description: z.string().trim().min(1).max(5000),
+  location: z.string().trim().min(1).max(100),
+  employmentType: EmploymentType,
+  salaryMin: z.coerce.number().finite(),
+  salaryMax: z.coerce.number().finite(),
+  status: JobStatus.optional(),
+  skills: z
+    .array(JobSkillInput)
+    .max(20)
+    .refine((s) => new Set(s.map((x) => x.skillId)).size === s.length, "Each skill can be listed only once."),
+});
+export type JobInput = z.infer<typeof JobInput>;
+
+export interface RecruiterDashboard {
+  company: { companyId: number; companyName: string };
+  kpis: { openJobs: number; totalApplicants: number; inReview: number; interviews: number; offers: number; avgMatchScore: number };
+  funnel: Array<{ stage: ApplicationStatus; count: number }>;
+  pipeline: Array<{
+    jobId: number;
+    jobTitle: string;
+    jobStatus: JobStatus;
+    postedDate: string;
+    daysOpen: number;
+    totalApplicants: number;
+    avgMatchScore: number;
+    underReview: number;
+    interviews: number;
+    offers: number;
+    rejected: number;
+    offerRatePct: number | null;
+  }>;
+  hardToFillSkills: Array<{ jobId: number; jobTitle: string; skill: string; requiredLevel: ProficiencyLevel; qualifiedCandidates: number }>;
+}
+
+export interface Applicant {
+  applicationId: number;
+  candidateId: number;
+  name: string;
+  email: string;
+  location: string | null;
+  experienceYears: number;
+  status: ApplicationStatus;
+  appliedDate: string;
+  scoreAtApply: number;
+  currentScore: number;
+  sqlRank: number; // RANK() among applicants by current fn_match_score
+  resumeUrl: string | null;
+  nextStatuses: ApplicationStatus[];
+}
+
+export interface RankingRow {
+  candidateId: number;
+  name: string;
+  experienceYears: number;
+  sqlScore: number;
+  sqlRank: number;
+  graphScore: number | null;
+  graphRank: number | null;
+  rankChange: number | null; // + = graph ranks this candidate higher
+  hasApplied: boolean;
+}
+
+export interface ApplicantsResponse {
+  job: { jobId: number; title: string; status: JobStatus };
+  applicants: Applicant[];
+  ranking: {
+    graphAvailable: boolean;
+    rows: RankingRow[]; // union of the SQL top-N and graph top-N talent pool
+    topN: number;
+    overlap: number; // candidates in both top-N lists
+  };
+}
+
+export const StatusUpdateInput = z.object({
+  status: ApplicationStatus,
+  remarks: z.string().trim().max(255).optional(),
+});
+export type StatusUpdateInput = z.infer<typeof StatusUpdateInput>;
