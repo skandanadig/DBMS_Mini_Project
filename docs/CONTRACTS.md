@@ -76,12 +76,13 @@ An Admin passes every ownership check. A Candidate never passes a recruiter chec
 | `POST /api/auth/logout` | any | n/a | none → `204` | A |
 | `GET /api/auth/me` | any | n/a | → `{user, profile}` (role-specific profile) | A |
 | `GET /api/health` | public | n/a | → `{status, mysql, neo4j}`; 503 if either database is down | A |
-| `GET /api/jobs` | public | n/a | `?q=&location=&type=&minSalary=&skillId=&page=` → paged `JobSummary` | B |
+| `GET /api/jobs` | public | n/a | `?q=&location=&type=&minSalary=&skillId=&sort=&page=&pageSize=` → paged `JobSummary` + `facets`. A signed-in candidate also gets their own `matchScore`. | B |
+| `GET /api/skills` | public | n/a | → `SkillOption[]` (skill catalogue for forms and filters) | B |
 | `GET /api/jobs/:id` | public | n/a | → `JobDetail` (incl. required skills) | B |
-| `GET /api/jobs/:id/match` | Candidate | self | → `{score, matched[], missing[], related[]}` (SQL `fn_match_score` + Neo4j skill gap) | B |
-| `POST /api/jobs/:id/apply` | Candidate | self | none → `{applicationId, statusCode, message}` (from `sp_submit_application`) | B |
+| `GET /api/jobs/:id/match` | Candidate | self | → `JobMatchResponse`: SQL `exactScore` + per-skill state, Neo4j `graphScore`, `related`, `referrals`; `graphAvailable=false` if Neo4j is down | B |
+| `POST /api/jobs/:id/apply` | Candidate | self | none → 201 `{applicationId, statusCode, message}` (from `sp_submit_application`). Other SP outcomes use the standard error shape: DUPLICATE → 409, NOT_FOUND → 404, FAILED → 422, ERROR → 500, each with `details.statusCode`. | B |
 | `GET /api/me/applications` | Candidate | self | → `CandidateApplication[]` (from `vw_candidate_applications`) + audit trail | B |
-| `GET/PUT /api/me/profile` | Candidate | self | `CandidateProfile` | B |
+| `GET/PUT /api/me/profile` | Candidate | self | `ProfileInput` → `CandidateProfile`. Updates `users` + `candidates` in one transaction; CHECK violations → 422. | B |
 | `GET/POST/DELETE /api/me/skills` | Candidate | self | `{skillId, proficiency, years}` | B |
 | `GET /api/me/recommendations` | Candidate | self | → `{jobs: RecommendedJob[], referrals: ReferralPath[]}` (Neo4j) | B |
 | `GET /api/recruiter/dashboard` | Recruiter | own jobs | → `vw_recruiter_pipeline` rows + `sp_get_recruiter_analytics` | A |
@@ -187,11 +188,11 @@ How it works:
 | `web/lib/neo4j.ts` (driver; created by A in Phase 3, extended by B), `web/lib/graph-queries.ts`, `web/lib/graph-sync.ts`, `web/lib/sync-trigger.ts`, `web/scripts/sync-graph.ts`, `docs/GRAPH_SYNC.md` | B |
 | `web/app/(auth)/**`, `web/app/api/auth/**` | A |
 | `web/app/recruiter/**`, `web/app/api/recruiter/**` | A |
-| `web/app/jobs/**`, `web/app/me/**`, `web/app/api/jobs/**`, `web/app/api/me/**` | B |
+| `web/app/jobs/**`, `web/app/me/**`, `web/app/api/jobs/**`, `web/app/api/me/**`, `web/app/api/skills/**`, `web/components/candidate/**`, `web/lib/jobs.ts`, `web/lib/api-client.ts` | B |
 | `web/app/admin/**`, `web/app/api/admin/**` | B |
 | `web/components/ui/**` (shared primitives) | A creates them; B may add to them |
 | `web/tests/auth.test.ts`, `db.test.ts`, `constraints.test.ts`, `helpers.ts` | A |
-| `web/tests/procedures.test.ts`, `rollback.test.ts`, `sync.test.ts` | B |
+| `web/tests/procedures.test.ts`, `rollback.test.ts`, `sync.test.ts`, `jobs.test.ts`, `candidate-fixtures.ts` | B |
 | `docs/PROJECT_REPORT.md`, `README.md` | A + B |
 | `docs/ER_DIAGRAM_AND_RELATIONAL_SCHEMA.md` | A |
 | `docs/RANKING_COMPARISON.md` | B |
@@ -204,3 +205,4 @@ How it works:
 | 2026-11-16 | Phase 2: `Company.industry` and `WORKED_AT.since` added. Graph scoring rule fixed: `exactScore` must equal MySQL `fn_match_score`; `graphScore` adds implied credit 0.8 (`SUBSKILL_OF`) or related credit 0.5 × path weight (`RELATED_TO`) for missing skills | A, B |
 | 2026-11-16 | Phase 3 (Next.js 16): `middleware.ts` → `proxy.ts`. JWT `sub` is a string. `authz` helpers take the `SessionUser`. New A-owned files: `session.ts`, `server-session.ts`, `env.ts`, `load-root-env.ts`, `tests/db.test.ts`. `lib/neo4j.ts` was created by A for `/api/health`. Added public `GET /api/health`. | A, B |
 | 2026-11-16 | Phase 4: the worker is `processOutbox()` in `lib/graph-sync.ts`, guarded by MySQL `GET_LOCK('skillmatch_graph_sync')`. It stops at the first failure and parks an event as FAILED after 5 attempts. Company data is read from MySQL when a JOB event is applied. `JOB_SKILL.is_mandatory` arrives as 1/0 in payloads. Routes that change mirrored data must call `requestGraphSync()` from `lib/sync-trigger.ts` after commit. Full design: `docs/GRAPH_SYNC.md`. | A, B |
+| 2026-11-16 | Phase 5: added `GET /api/skills` and the `/me/profile` page (a resume is required to apply). Apply outcomes map to HTTP statuses as listed above. `lib/graph-queries.ts` exports `rankCandidatesForJob(jobId)` for the Phase 6 recruiter ranking. Candidate nav links were added to `app/layout.tsx` (A). | A, B |

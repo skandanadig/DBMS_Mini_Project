@@ -106,7 +106,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # pas
 cd web
 npm install          # web/.npmrc sets legacy-peer-deps (works around an npm 10.9 crash on vitest's optional peers)
 npm run dev          # http://localhost:3000
-npm test             # Vitest integration tests against the Docker MySQL + Neo4j (42 tests)
+npm test             # Vitest integration tests against the Docker MySQL + Neo4j (70 tests)
 npm run sync:graph   # apply pending MySQL changes to Neo4j, then verify both stores match
 npm run sync:graph -- --watch    # keep syncing every 5 s (handy during a demo)
 npm run sync:graph -- --full     # rebuild mirrored graph data from MySQL, then sync
@@ -117,3 +117,6 @@ npm run build && npm start
 The app reads the **same root `.env`** as docker compose: there is no separate `web/.env`.
 Health check: `http://localhost:3000/api/health` (200 when MySQL and Neo4j are both reachable).
 Demo logins (password `Password@123`): `admin@skillmatch.io`, `sarah.j@techcorp.com` (recruiter), `rahul.sharma@gmail.com` (candidate).
+
+**Candidate features** (sign in as `rahul.sharma@gmail.com` or `meera.joshi@gmail.com`):
+`/jobs` (full-text search, filters, sort by personal match) · `/jobs/[id]` (SQL vs graph match score, skill-gap table, related-skill paths, referral paths, apply through `sp_submit_application`) · `/me/recommendations` (Neo4j job recommendations and "learn next") · `/me/applications` (status timeline from the audit trigger) · `/me/skills` · `/me/profile` (a resume link is required to apply).
