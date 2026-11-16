@@ -85,11 +85,12 @@ An Admin passes every ownership check. A Candidate never passes a recruiter chec
 | `GET/PUT /api/me/profile` | Candidate | self | `ProfileInput` → `CandidateProfile`. Updates `users` + `candidates` in one transaction; CHECK violations → 422. | B |
 | `GET/POST/DELETE /api/me/skills` | Candidate | self | `{skillId, proficiency, years}` | B |
 | `GET /api/me/recommendations` | Candidate | self | → `{jobs: RecommendedJob[], referrals: ReferralPath[]}` (Neo4j) | B |
-| `GET /api/recruiter/dashboard` | Recruiter | own jobs | → `vw_recruiter_pipeline` rows + `sp_get_recruiter_analytics` | A |
+| `GET /api/recruiter/dashboard` | Recruiter | own jobs | → `RecruiterDashboard`: KPIs (from `vw_recruiter_pipeline`), per-job funnel + hard-to-fill skills (from `sp_get_recruiter_analytics`), reached-stage funnel (from the audit trail) | A |
 | `POST /api/recruiter/jobs` | Recruiter | company = the recruiter's own company | `JobInput` → `{jobId}` | A |
+| `GET /api/recruiter/jobs/:id` | Recruiter | `assertRecruiterOwnsJob` | → `JobDetail` (any status, for the edit form) | A |
 | `PUT /api/recruiter/jobs/:id` | Recruiter | `assertRecruiterOwnsJob` | `JobInput` (incl. `status`) → `JobDetail` | A |
-| `GET /api/recruiter/jobs/:id/applicants` | Recruiter | `assertRecruiterOwnsJob` | → `{sqlRanking: Ranked[], graphRanking: Ranked[]}` | A |
-| `PATCH /api/recruiter/applications/:id/status` | Recruiter | `assertRecruiterOwnsApplication` | `{status, remarks}` → `{rowsAffected}` (from `sp_update_application_status`) | A |
+| `GET /api/recruiter/jobs/:id/applicants` | Recruiter | `assertRecruiterOwnsJob` | → `ApplicantsResponse`: applicants ranked by SQL `RANK()`, plus `ranking.rows` (union of the SQL and graph top-10 with both ranks, `rankChange` and `overlap`) | A |
+| `PATCH /api/recruiter/applications/:id/status` | Recruiter | `assertRecruiterOwnsApplication` (and again inside the SP) | `{status, remarks}` → `{applicationId, status, nextStatuses, rowsAffected}`; an invalid transition → 422 | A |
 | `GET/POST /api/admin/users` | Admin | n/a | create Recruiter/Admin: `{name,email,password,role,companyId?,designation?}` | B |
 | `GET/POST/PUT /api/admin/skills` | Admin | n/a | `{skillName, category}` | B |
 | `GET /api/admin/audit-logs` | Admin | n/a | paged `application_audit_logs` | B |
@@ -187,11 +188,11 @@ How it works:
 | `web/lib/db.ts`, `web/lib/procedures.ts`, `web/lib/auth.ts`, `web/lib/authz.ts`, `web/lib/session.ts`, `web/lib/server-session.ts`, `web/lib/errors.ts`, `web/lib/contracts.ts`, `web/lib/env.ts`, `web/lib/load-root-env.ts`, `web/proxy.ts` | A |
 | `web/lib/neo4j.ts` (driver; created by A in Phase 3, extended by B), `web/lib/graph-queries.ts`, `web/lib/graph-sync.ts`, `web/lib/sync-trigger.ts`, `web/scripts/sync-graph.ts`, `docs/GRAPH_SYNC.md` | B |
 | `web/app/(auth)/**`, `web/app/api/auth/**` | A |
-| `web/app/recruiter/**`, `web/app/api/recruiter/**` | A |
+| `web/app/recruiter/**`, `web/app/api/recruiter/**`, `web/components/recruiter/**`, `web/lib/recruiter.ts` | A |
 | `web/app/jobs/**`, `web/app/me/**`, `web/app/api/jobs/**`, `web/app/api/me/**`, `web/app/api/skills/**`, `web/components/candidate/**`, `web/lib/jobs.ts`, `web/lib/api-client.ts` | B |
 | `web/app/admin/**`, `web/app/api/admin/**` | B |
 | `web/components/ui/**` (shared primitives) | A creates them; B may add to them |
-| `web/tests/auth.test.ts`, `db.test.ts`, `constraints.test.ts`, `helpers.ts` | A |
+| `web/tests/auth.test.ts`, `db.test.ts`, `constraints.test.ts`, `recruiter.test.ts`, `helpers.ts` | A |
 | `web/tests/procedures.test.ts`, `rollback.test.ts`, `sync.test.ts`, `jobs.test.ts`, `candidate-fixtures.ts` | B |
 | `docs/PROJECT_REPORT.md`, `README.md` | A + B |
 | `docs/ER_DIAGRAM_AND_RELATIONAL_SCHEMA.md` | A |
@@ -206,3 +207,4 @@ How it works:
 | 2026-11-16 | Phase 3 (Next.js 16): `middleware.ts` → `proxy.ts`. JWT `sub` is a string. `authz` helpers take the `SessionUser`. New A-owned files: `session.ts`, `server-session.ts`, `env.ts`, `load-root-env.ts`, `tests/db.test.ts`. `lib/neo4j.ts` was created by A for `/api/health`. Added public `GET /api/health`. | A, B |
 | 2026-11-16 | Phase 4: the worker is `processOutbox()` in `lib/graph-sync.ts`, guarded by MySQL `GET_LOCK('skillmatch_graph_sync')`. It stops at the first failure and parks an event as FAILED after 5 attempts. Company data is read from MySQL when a JOB event is applied. `JOB_SKILL.is_mandatory` arrives as 1/0 in payloads. Routes that change mirrored data must call `requestGraphSync()` from `lib/sync-trigger.ts` after commit. Full design: `docs/GRAPH_SYNC.md`. | A, B |
 | 2026-11-16 | Phase 5: added `GET /api/skills` and the `/me/profile` page (a resume is required to apply). Apply outcomes map to HTTP statuses as listed above. `lib/graph-queries.ts` exports `rankCandidatesForJob(jobId)` for the Phase 6 recruiter ranking. Candidate nav links were added to `app/layout.tsx` (A). | A, B |
+| 2026-11-16 | Phase 6: new MySQL trigger `trg_job_status_rules` (ARCHIVED is terminal; a job can't change recruiter). Added `GET /api/recruiter/jobs/:id`. `NEXT_STATUSES` in `lib/contracts.ts` mirrors the status trigger, for the UI only. Chart colours are the validated tokens `--color-series-1/2` in `globals.css`; B's `ScoreBar` was switched to them because the old blue/violet pair failed the colour-blind check. | A, B |

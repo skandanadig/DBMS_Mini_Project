@@ -47,3 +47,27 @@ export async function cleanupTestUsers(): Promise<void> {
     [ids, ids],
   );
 }
+
+/** Every job created by the test suites starts with this title prefix. */
+export const TEST_JOB_PREFIX = "VITEST";
+
+/**
+ * Delete test jobs (cascades to job_skills and applications), apply the
+ * resulting DELETE events to Neo4j, then remove those jobs' outbox history.
+ */
+export async function cleanupTestJobs(): Promise<void> {
+  const { processOutbox } = await import("@/lib/graph-sync");
+  const { waitForGraphSync } = await import("@/lib/sync-trigger");
+  await waitForGraphSync();
+  const rows = await query<RowDataPacket[]>("SELECT job_id FROM jobs WHERE job_title LIKE ?", [`${TEST_JOB_PREFIX}%`]);
+  const ids = rows.map((r) => String(r.job_id));
+  if (ids.length === 0) return;
+  await query("DELETE FROM jobs WHERE job_title LIKE ?", [`${TEST_JOB_PREFIX}%`]);
+  await processOutbox();
+  await query(
+    `DELETE FROM graph_sync_outbox
+      WHERE (entity_type = 'JOB' AND entity_id IN (?))
+         OR (entity_type = 'JOB_SKILL' AND SUBSTRING_INDEX(entity_id, ':', 1) IN (?))`,
+    [ids, ids],
+  );
+}

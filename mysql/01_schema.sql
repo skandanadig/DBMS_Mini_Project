@@ -443,6 +443,24 @@ BEGIN
     END IF;
 END //
 
+-- ---- Jobs: lifecycle rules ---------------------------------------------------
+--   OPEN <-> CLOSED (a recruiter may pause and reopen a posting)
+--   OPEN / CLOSED -> ARCHIVED, and ARCHIVED is terminal
+--   a job can never be moved to another recruiter
+CREATE TRIGGER trg_job_status_rules
+BEFORE UPDATE ON jobs
+FOR EACH ROW
+BEGIN
+    IF NEW.recruiter_id <> OLD.recruiter_id THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'A job posting cannot be transferred to another recruiter.';
+    END IF;
+    IF OLD.status = 'ARCHIVED' AND NEW.status <> 'ARCHIVED' THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Archived job postings cannot be reopened.';
+    END IF;
+END //
+
 -- ---- Applications: business rules ------------------------------------------
 
 -- Trigger 1 (original): Prevent applying to CLOSED or ARCHIVED jobs

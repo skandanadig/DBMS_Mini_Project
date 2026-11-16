@@ -215,6 +215,11 @@ CALL t_expect_error('T09 invalid transition APPLIED -> OFFERED',
      CONCAT("UPDATE applications SET status = 'OFFERED' WHERE application_id = ", @t_app), 1644);
 CALL t_expect_error('T10 application job_id is immutable',
      CONCAT("UPDATE applications SET job_id = 1 WHERE application_id = ", @t_app), 1644);
+CALL t_expect_error('T13 job cannot be transferred to another recruiter',
+     CONCAT("UPDATE jobs SET recruiter_id = 3 WHERE job_id = ", @t_job_closed), 1644);
+UPDATE jobs SET status = 'ARCHIVED' WHERE job_id = @t_job_closed;
+CALL t_expect_error('T14 ARCHIVED job cannot be reopened',
+     CONCAT("UPDATE jobs SET status = 'OPEN' WHERE job_id = ", @t_job_closed), 1644);
 
 -- =============================================================================
 -- 4. STORED PROCEDURE sp_update_application_status (authz + audit)

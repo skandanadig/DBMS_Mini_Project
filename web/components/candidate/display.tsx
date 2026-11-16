@@ -17,7 +17,9 @@ export function ScoreBar({ label, value, tone = "brand" }: { label: string; valu
       </div>
       <div className="h-2 rounded-full bg-slate-100" role="meter" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
         <div
-          className={cx("h-2 rounded-full transition-all", tone === "brand" ? "bg-brand-500" : "bg-violet-500")}
+          // series-1 / series-2: validated colour-blind-safe pair (see globals.css);
+          // the previous blue/violet pair failed protan separation (dE 2.5)
+          className={cx("h-2 rounded-full transition-all", tone === "brand" ? "bg-series-1" : "bg-series-2")}
           style={{ width: `${pct}%` }}
         />
       </div>
