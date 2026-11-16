@@ -126,14 +126,14 @@ Database objects the app may call (all others are internal):
 | :--- | :--- | :--- |
 | `(:Candidate)` | `id` (unique) = candidate_id, `name`, `location`, `experience_years` | `candidates` + `users` |
 | `(:Job)` | `id` (unique), `title`, `location`, `status` | `jobs` |
-| `(:Company)` | `id` (unique), `name`, `location` | `companies` |
+| `(:Company)` | `id` (unique), `name`, `industry`, `location` | `companies` |
 | `(:Skill)` | `id` (unique), `name` (unique), `category` (indexed) | `skills` |
 | `(:Candidate)-[:HAS_SKILL {proficiency, years}]->(:Skill)` | | `candidate_skills` |
 | `(:Job)-[:REQUIRES_SKILL {required_level, is_mandatory}]->(:Skill)` | | `job_skills` |
 | `(:Job)-[:OFFERED_BY]->(:Company)` | | `jobs → recruiters → companies` |
 | `(:Skill)-[:RELATED_TO {weight}]->(:Skill)` | | graph-only (curated ontology) |
 | `(:Skill)-[:SUBSKILL_OF]->(:Skill)` | | graph-only (curated ontology) |
-| `(:Candidate)-[:WORKED_AT]->(:Company)` | | graph-only (seeded demo data) |
+| `(:Candidate)-[:WORKED_AT {since}]->(:Company)` | | graph-only (seeded demo data) |
 | `(:Candidate)-[:CONNECTED_TO]-(:Candidate)` | | graph-only (seeded demo data) |
 
 Rules:
@@ -195,3 +195,4 @@ How it works:
 | Date | Change | Agreed by |
 | :--- | :--- | :--- |
 | 2026-11-16 | Initial contracts (Phase 0) | A, B |
+| 2026-11-16 | Phase 2: `Company.industry` and `WORKED_AT.since` added. Graph scoring rule fixed: `exactScore` must equal MySQL `fn_match_score`; `graphScore` adds implied credit 0.8 (`SUBSKILL_OF`) or related credit 0.5 × path weight (`RELATED_TO`) for missing skills | A, B |
