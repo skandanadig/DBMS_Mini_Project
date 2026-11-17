@@ -83,7 +83,9 @@ export default function RecruiterDashboardPage() {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+        {/* min-w-0: let the table scroll inside the card on small screens
+            (grid items default to min-width:auto and would widen the page) */}
+        <Card className="min-w-0 lg:col-span-2">
           <h2 className="mb-3 font-semibold">Postings</h2>
           {data.pipeline.length === 0 ? (
             <EmptyState title="No postings yet." />

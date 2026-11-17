@@ -232,6 +232,8 @@ CALL t_assert('P08 audit row carries remarks + changed_by',
               WHERE application_id = @t_app AND old_status = 'APPLIED' AND new_status = 'UNDER_REVIEW'
                 AND remarks = 'QA shortlisted' AND changed_by = @t_rec), NULL);
 
+SET @t_audit_before_rejects = (SELECT COUNT(*) FROM application_audit_logs WHERE application_id = @t_app);
+
 CALL t_expect_error('P09 non-owner recruiter is rejected',
      CONCAT("CALL sp_update_application_status(", @t_app, ", 'INTERVIEW_SCHEDULED', 'x', 3, @x)"), 1644);
 CALL t_expect_error('P10 candidate cannot change status',
@@ -240,12 +242,21 @@ CALL t_expect_error('P11 invalid status value',
      CONCAT("CALL sp_update_application_status(", @t_app, ", 'HIRED', 'x', ", @t_rec, ", @x)"), 1644);
 CALL t_expect_error('P12 invalid transition via procedure (UNDER_REVIEW -> OFFERED)',
      CONCAT("CALL sp_update_application_status(", @t_app, ", 'OFFERED', 'x', ", @t_rec, ", @x)"), 1644);
+CALL t_expect_error('P16 unknown acting user is rejected',
+     CONCAT("CALL sp_update_application_status(", @t_app, ", 'INTERVIEW_SCHEDULED', 'x', 999999, @x)"), 1644);
 CALL t_assert('P13 rejected calls did not change status',
      (SELECT status FROM applications WHERE application_id = @t_app) = 'UNDER_REVIEW', NULL);
+CALL t_assert('P17 rejected calls wrote no audit rows (rolled back)',
+     (SELECT COUNT(*) FROM application_audit_logs WHERE application_id = @t_app) = @t_audit_before_rejects,
+     CONCAT('before=', @t_audit_before_rejects, ' after=',
+            (SELECT COUNT(*) FROM application_audit_logs WHERE application_id = @t_app)));
 
 SET @o_rows = NULL;
 CALL sp_update_application_status(999999, 'UNDER_REVIEW', 'x', @t_rec, @o_rows);
 CALL t_assert('P14 unknown application -> 0 rows', @o_rows = 0, CONCAT('rows=', @o_rows));
+SET @o_rows = NULL;
+CALL sp_update_application_status(999999, 'UNDER_REVIEW', 'x', @t_cand_a, @o_rows);
+CALL t_assert('P18 unknown application -> 0 rows for any actor (no info leak)', @o_rows = 0, CONCAT('rows=', @o_rows));
 
 SET @o_rows = NULL;
 CALL sp_update_application_status(@t_app, 'INTERVIEW_SCHEDULED', 'Admin override', 1, @o_rows);

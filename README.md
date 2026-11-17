@@ -11,7 +11,7 @@ PES University · CSE · DBMS Experiential Learning, Level 3 Project.
 - An ACID application procedure with row locking: 3 concurrent identical submits → exactly one succeeds.
 - A transactional outbox that keeps Neo4j in sync with MySQL: idempotent, ordered, verifiable.
 - Role-based access (Candidate / Recruiter / Admin) checked in **every** API route.
-- 51 SQL tests + 104 application tests, all passing.
+- 54 SQL tests + 109 application tests, all passing ([final QA report](docs/FINAL_QA_REPORT.md)).
 
 ## Documentation
 
@@ -84,7 +84,7 @@ npm test
 npm run typecheck
 cd ..
 ```
-`06_tests.sql` should end with `51 | 0 | 51 | ALL TESTS PASSED`, and `npm test` with `Tests 104 passed (104)`. The tests expect the demo data: reset first (step 6) if you have changed data by hand.
+`06_tests.sql` should end with `54 | 0 | 54 | ALL TESTS PASSED`, and `npm test` with `Tests 109 passed (109)`. The tests expect the demo data: reset first (step 6) if you have changed data by hand.
 
 Demo scripts, each printing tables:
 ```cmd
