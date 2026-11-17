@@ -856,6 +856,17 @@ DELIMITER ;
 --     trg_audit_application_status_update
 --   * invalid transitions are rejected by trg_validate_status_transition
 --   * p_rows_affected = 0 when the application does not exist
+--
+-- Concurrency (no time-of-check/time-of-use gap): the transaction starts
+-- BEFORE any authorization-relevant row is read, every such row is read with
+-- a locking read, and the locks are held until COMMIT/ROLLBACK, so the
+-- checks and the UPDATE see the same data. Lock order is parent -> child
+--     users (S) -> jobs (S) -> applications (X)
+-- the same order used by every other writer (sp_submit_application locks
+-- jobs then inserts applications; FK cascades go parent -> child), which
+-- avoids deadlock cycles. Shared locks on the user and job rows mean
+-- concurrent updates of OTHER applications of the same job do not block
+-- each other; only the one application row is locked exclusively.
 DELIMITER //
 CREATE PROCEDURE sp_update_application_status(
     IN p_application_id INT,
@@ -866,10 +877,13 @@ CREATE PROCEDURE sp_update_application_status(
 )
 proc_label: BEGIN
     DECLARE v_app_count INT DEFAULT 0;
+    DECLARE v_job_id INT;
     DECLARE v_job_owner INT;
     DECLARE v_actor_role VARCHAR(20);
     DECLARE v_msg VARCHAR(255);
 
+    -- Any error (including SIGNALs below and trigger rejections) undoes the
+    -- transaction and is re-raised to the caller.
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
@@ -878,23 +892,50 @@ proc_label: BEGIN
 
     SET p_rows_affected = 0;
 
+    -- 1. Pure input validation (reads no data)
     IF p_new_status IS NULL OR p_new_status NOT IN
        ('APPLIED', 'UNDER_REVIEW', 'INTERVIEW_SCHEDULED', 'OFFERED', 'REJECTED') THEN
         SET v_msg = CONCAT('Invalid application status: ', COALESCE(p_new_status, 'NULL'), '.');
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_msg;
     END IF;
 
-    SELECT COUNT(*), MAX(j.recruiter_id) INTO v_app_count, v_job_owner
-      FROM applications a
-      JOIN jobs j ON j.job_id = a.job_id
-     WHERE a.application_id = p_application_id;
+    START TRANSACTION;
+
+    -- 2. Acting user (S lock: the role cannot change or the account vanish
+    --    until we finish)
+    SELECT MAX(role) INTO v_actor_role
+      FROM users WHERE user_id = p_changed_by
+       FOR SHARE;
+
+    -- 3. Which job does the application belong to? applications.job_id is
+    --    immutable (trg_validate_status_transition), so this plain read is
+    --    safe; it is re-verified under lock in step 5.
+    SELECT MAX(job_id) INTO v_job_id
+      FROM applications WHERE application_id = p_application_id;
+
+    IF v_job_id IS NULL THEN
+        ROLLBACK;
+        LEAVE proc_label;               -- unknown application -> 0 rows
+    END IF;
+
+    -- 4. Job owner (S lock on the job row)
+    SELECT MAX(recruiter_id) INTO v_job_owner
+      FROM jobs WHERE job_id = v_job_id
+       FOR SHARE;
+
+    -- 5. The application row itself (X lock); it may have been deleted
+    --    between step 3 and now
+    SELECT COUNT(*) INTO v_app_count
+      FROM applications
+     WHERE application_id = p_application_id AND job_id = v_job_id
+       FOR UPDATE;
 
     IF v_app_count = 0 THEN
+        ROLLBACK;
         LEAVE proc_label;
     END IF;
 
-    SELECT MAX(role) INTO v_actor_role FROM users WHERE user_id = p_changed_by;
-
+    -- 6. Authorization on the locked data
     IF v_actor_role IS NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Unknown acting user.';
     ELSEIF v_actor_role = 'Candidate' THEN
@@ -903,8 +944,8 @@ proc_label: BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Recruiter does not own this job posting.';
     END IF;
 
-    START TRANSACTION;
-
+    -- 7. The write (the state-machine and audit triggers run inside this
+    --    same transaction)
     UPDATE applications
        SET status = p_new_status,
            status_changed_by = p_changed_by,
