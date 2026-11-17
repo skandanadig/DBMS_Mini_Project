@@ -5,8 +5,8 @@ Department of Computer Science and Engineering, PES University · Faculty: Dr. N
 
 | Team member | SRN | Role in this report |
 | :--- | :--- | :--- |
-| *Member A: name* | *SRN* | Relational core, API foundation, recruiter features |
-| *Member B: name* | *SRN* | Graph database, synchronisation, candidate & admin features |
+| Sri Pranav Gautam Buduguru (Member A) | PES1UG24CS466 | Relational core, API foundation, recruiter features |
+| Skanda Shyam Nadig (Member B) | PES1UG24CS458 | Graph database, synchronisation, candidate & admin features |
 
 **Stack:** MySQL 8.0 (relational, source of truth) · Neo4j 5 (graph) · Next.js 16 (App Router, route handlers) · TypeScript · Docker Compose
 
@@ -322,7 +322,7 @@ Neo4j is used where the data is genuinely a graph. The outbox keeps it consisten
 
 The Git history shows each member's commits; each phase was developed on its own branch and merged with `--no-ff`. File ownership is recorded in [`CONTRACTS.md` §7](CONTRACTS.md#7-file-ownership).
 
-| Area | Member A | Member B |
+| Area | Member A: Sri Pranav Gautam Buduguru (PES1UG24CS466) | Member B: Skanda Shyam Nadig (PES1UG24CS458) |
 | :--- | :--- | :--- |
 | Infrastructure | Docker Compose, env config, shared contracts | Shared contracts |
 | Relational database | Schema, constraints, triggers, procedures, function, views, seed, ALTER/performance/test scripts | n/a |

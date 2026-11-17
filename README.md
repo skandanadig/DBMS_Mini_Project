@@ -126,7 +126,7 @@ Then repeat the graph seed in step 2 and `npm run sync:graph` in step 3.
 ## Team
 | Member | Responsibilities |
 | :--- | :--- |
-| *Member A: name (SRN)* | MySQL schema, constraints, triggers, procedures, performance and SQL tests; auth and RBAC; recruiter features |
-| *Member B: name (SRN)* | Neo4j model and queries; outbox sync worker; candidate and admin features |
+| Sri Pranav Gautam Buduguru (PES1UG24CS466), Member A | MySQL schema, constraints, triggers, procedures, performance and SQL tests; auth and RBAC; recruiter features |
+| Skanda Shyam Nadig (PES1UG24CS458), Member B | Neo4j model and queries; outbox sync worker; candidate and admin features |
 
 Each phase was built on its own branch and merged with `--no-ff`; see `git log --graph` and the [contributions section of the report](docs/PROJECT_REPORT.md#13-individual-contributions).
