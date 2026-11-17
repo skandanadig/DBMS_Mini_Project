@@ -34,13 +34,15 @@ function Funnel({ funnel }: { funnel: RecruiterDashboard["funnel"] }) {
         const pct = (f.count / max) * 100;
         const conv = funnel[0].count ? Math.round((f.count / funnel[0].count) * 100) : 0;
         return (
-          <li key={f.stage} className="group grid grid-cols-[9rem_1fr] items-center gap-3 text-sm" title={`${STAGE_LABEL[f.stage]}: ${f.count} (${conv}% of applicants)`}>
+          <li key={f.stage} className="group grid grid-cols-[8rem_1fr_4.5rem] items-center gap-3 text-sm" title={`${STAGE_LABEL[f.stage]}: ${f.count} (${conv}% of applicants)`}>
             <span className="text-slate-700">{STAGE_LABEL[f.stage]}</span>
-            <span className="flex items-center gap-2">
-              <span className="h-3 rounded-r bg-series-1 transition-opacity group-hover:opacity-80" style={{ width: `${Math.max(pct, f.count ? 2 : 0)}%` }} />
-              <span className="whitespace-nowrap font-medium text-slate-900">
-                {f.count} <span className="font-normal text-slate-500">· {conv}%</span>
-              </span>
+            {/* Full-width track: bar length is a true proportion of the track
+                (a bar sharing a flex row with its label gets shrunk unevenly). */}
+            <span className="block h-3 w-full">
+              <span className="block h-3 rounded-r bg-series-1 transition-opacity group-hover:opacity-80" style={{ width: `${Math.max(pct, f.count ? 2 : 0)}%` }} />
+            </span>
+            <span className="whitespace-nowrap font-medium text-slate-900">
+              {f.count} <span className="font-normal text-slate-500">· {conv}%</span>
             </span>
           </li>
         );
