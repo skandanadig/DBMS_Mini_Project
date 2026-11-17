@@ -79,9 +79,15 @@ export function toAppError(e: unknown): AppError {
 
   if (isMysqlError(e)) {
     if (e.errno === 1062) {
-      const message = e.sqlMessage?.includes("uk_users_email")
-        ? "An account with this email already exists."
-        : "A record with the same unique value already exists.";
+      // Map the violated UNIQUE constraint (named in mysql/01_schema.sql) to a readable message
+      const byConstraint: Array<[string, string]> = [
+        ["uk_users_email", "An account with this email already exists."],
+        ["uk_skill_name", "A skill with this name already exists."],
+        ["uk_company_name", "A company with this name already exists."],
+        ["uk_job_candidate", "This candidate has already applied for this job."],
+      ];
+      const message =
+        byConstraint.find(([key]) => e.sqlMessage?.includes(key))?.[1] ?? "A record with the same unique value already exists.";
       return new AppError("CONFLICT", message);
     }
     if (DB_RULE_ERRNOS.has(e.errno)) {
