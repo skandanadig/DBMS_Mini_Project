@@ -317,3 +317,120 @@ export const StatusUpdateInput = z.object({
   remarks: z.string().trim().max(255).optional(),
 });
 export type StatusUpdateInput = z.infer<typeof StatusUpdateInput>;
+
+// ---- Admin features (Member B, Phase 7) -------------------------------------
+/**
+ * Admin-created accounts. Candidate is deliberately excluded: candidates use
+ * public registration, Recruiter/Admin accounts exist ONLY via this path.
+ */
+export const AdminCreateUserInput = z.discriminatedUnion("role", [
+  z.object({
+    role: z.literal("Recruiter"),
+    name: z.string().trim().min(1).max(100),
+    email: z.email("Enter a valid email address.").max(150).transform((v) => v.toLowerCase()),
+    password: z.string().min(8).max(72),
+    companyId: PositiveId,
+    designation: z.string().trim().min(1).max(100),
+  }),
+  z.object({
+    role: z.literal("Admin"),
+    name: z.string().trim().min(1).max(100),
+    email: z.email("Enter a valid email address.").max(150).transform((v) => v.toLowerCase()),
+    password: z.string().min(8).max(72),
+  }),
+]);
+export type AdminCreateUserInput = z.infer<typeof AdminCreateUserInput>;
+
+export const AdminUserQuery = z.object({
+  role: Role.optional(),
+  q: z.string().trim().max(100).optional(),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export interface AdminUserRow {
+  userId: number;
+  name: string;
+  email: string;
+  role: Role;
+  createdAt: string;
+  companyName: string | null; // recruiters
+  designation: string | null; // recruiters
+  activity: number; // applications (candidate) or postings (recruiter)
+}
+
+export interface Paged<T> {
+  data: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export const SkillUpsertInput = z.object({
+  skillName: z.string().trim().min(1).max(80),
+  category: z.string().trim().min(1).max(50),
+});
+export type SkillUpsertInput = z.infer<typeof SkillUpsertInput>;
+
+export interface AdminSkillRow extends SkillOption {
+  candidates: number;
+  jobs: number;
+  openJobs: number;
+}
+
+export const AuditLogQuery = z.object({
+  status: ApplicationStatus.optional(),
+  q: z.string().trim().max(100).optional(),
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+export interface AuditLogRow {
+  logId: number;
+  applicationId: number;
+  jobTitle: string;
+  candidateName: string;
+  oldStatus: ApplicationStatus | null;
+  newStatus: ApplicationStatus;
+  changedBy: string | null;
+  changedByRole: Role | null;
+  changedAt: string;
+  remarks: string | null;
+}
+
+export const OutboxStatus = z.enum(["PENDING", "DONE", "FAILED"]);
+export const OutboxQuery = z.object({
+  status: OutboxStatus.optional(),
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+export interface OutboxRow {
+  eventId: number;
+  entityType: string;
+  entityId: string;
+  op: "UPSERT" | "DELETE";
+  status: z.infer<typeof OutboxStatus>;
+  attempts: number;
+  lastError: string | null;
+  createdAt: string;
+  processedAt: string | null;
+  payload: unknown;
+}
+
+export const OutboxRetryInput = z.object({
+  eventIds: z.array(z.coerce.number().int().positive()).min(1).max(500),
+});
+
+export interface OutboxSyncResponse {
+  sync: { lockAcquired: boolean; applied: number; skipped: number; failed: number; remainingPending: number; blockedAt?: { eventId: number; error: string } };
+  verify: { ok: boolean; mysqlEntries: number; graphEntries: number; missingInGraph: string[]; extraInGraph: string[] };
+}
+
+export interface AdminOverview {
+  users: Record<Role, number>;
+  jobs: Record<JobStatus, number>;
+  applications: Record<ApplicationStatus, number>;
+  topDemandedSkills: Array<{ skillId: number; name: string; category: string; demandingJobs: number; mandatoryIn: number }>;
+  outbox: Record<z.infer<typeof OutboxStatus>, number>;
+}

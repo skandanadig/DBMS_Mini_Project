@@ -91,11 +91,14 @@ An Admin passes every ownership check. A Candidate never passes a recruiter chec
 | `PUT /api/recruiter/jobs/:id` | Recruiter | `assertRecruiterOwnsJob` | `JobInput` (incl. `status`) → `JobDetail` | A |
 | `GET /api/recruiter/jobs/:id/applicants` | Recruiter | `assertRecruiterOwnsJob` | → `ApplicantsResponse`: applicants ranked by SQL `RANK()`, plus `ranking.rows` (union of the SQL and graph top-10 with both ranks, `rankChange` and `overlap`) | A |
 | `PATCH /api/recruiter/applications/:id/status` | Recruiter | `assertRecruiterOwnsApplication` (and again inside the SP) | `{status, remarks}` → `{applicationId, status, nextStatuses, rowsAffected}`; an invalid transition → 422 | A |
-| `GET/POST /api/admin/users` | Admin | n/a | create Recruiter/Admin: `{name,email,password,role,companyId?,designation?}` | B |
-| `GET/POST/PUT /api/admin/skills` | Admin | n/a | `{skillName, category}` | B |
-| `GET /api/admin/audit-logs` | Admin | n/a | paged `application_audit_logs` | B |
-| `GET /api/admin/outbox` | Admin | n/a | `?status=` paged `graph_sync_outbox` | B |
-| `POST /api/admin/outbox/retry` | Admin | n/a | `{eventIds[]}`: resets FAILED events → PENDING | B |
+| `GET /api/admin/overview` | Admin | n/a | → `AdminOverview`: users / jobs / applications by status, top demanded skills (`vw_top_demanded_skills`), outbox counts | B |
+| `GET/POST /api/admin/users` | Admin | n/a | GET `?role=&q=&page=` → paged `AdminUserRow`. POST `AdminCreateUserInput` creates a Recruiter (needs `companyId` + `designation`) or an Admin; Candidate is rejected (400); unknown company → 422 and nothing is created | B |
+| `GET /api/admin/companies` | Admin | n/a | → companies list (for the create-recruiter form) | B |
+| `GET/POST /api/admin/skills`, `PUT /api/admin/skills/:id` | Admin | n/a | `{skillName, category}`; GET includes usage counts; duplicate name → 409; changes reach Neo4j via the outbox | B |
+| `GET /api/admin/audit-logs` | Admin | n/a | `?status=&q=&page=` → paged `AuditLogRow` (who changed what, with role and remarks) | B |
+| `GET /api/admin/outbox` | Admin | n/a | `?status=&page=` → paged `OutboxRow` + `stats` per status | B |
+| `POST /api/admin/outbox/sync` | Admin | n/a | runs `processOutbox()`, then `verifyGraph()` → `OutboxSyncResponse` | B |
+| `POST /api/admin/outbox/retry` | Admin | n/a | `{eventIds[]}`: resets FAILED events only → PENDING with `attempts = 0`, then triggers a sync → `{retried}` | B |
 
 ## 4. MySQL Contract (target schema after Phase 1)
 
@@ -190,10 +193,10 @@ How it works:
 | `web/app/(auth)/**`, `web/app/api/auth/**` | A |
 | `web/app/recruiter/**`, `web/app/api/recruiter/**`, `web/components/recruiter/**`, `web/lib/recruiter.ts` | A |
 | `web/app/jobs/**`, `web/app/me/**`, `web/app/api/jobs/**`, `web/app/api/me/**`, `web/app/api/skills/**`, `web/components/candidate/**`, `web/lib/jobs.ts`, `web/lib/api-client.ts` | B |
-| `web/app/admin/**`, `web/app/api/admin/**` | B |
+| `web/app/admin/**`, `web/app/api/admin/**`, `web/components/admin/**`, `web/lib/admin.ts` | B |
 | `web/components/ui/**` (shared primitives) | A creates them; B may add to them |
 | `web/tests/auth.test.ts`, `db.test.ts`, `constraints.test.ts`, `recruiter.test.ts`, `helpers.ts` | A |
-| `web/tests/procedures.test.ts`, `rollback.test.ts`, `sync.test.ts`, `jobs.test.ts`, `candidate-fixtures.ts` | B |
+| `web/tests/procedures.test.ts`, `rollback.test.ts`, `sync.test.ts`, `jobs.test.ts`, `admin.test.ts`, `candidate-fixtures.ts` | B |
 | `docs/PROJECT_REPORT.md`, `README.md` | A + B |
 | `docs/ER_DIAGRAM_AND_RELATIONAL_SCHEMA.md` | A |
 | `docs/RANKING_COMPARISON.md` | B |
@@ -208,3 +211,4 @@ How it works:
 | 2026-11-16 | Phase 4: the worker is `processOutbox()` in `lib/graph-sync.ts`, guarded by MySQL `GET_LOCK('skillmatch_graph_sync')`. It stops at the first failure and parks an event as FAILED after 5 attempts. Company data is read from MySQL when a JOB event is applied. `JOB_SKILL.is_mandatory` arrives as 1/0 in payloads. Routes that change mirrored data must call `requestGraphSync()` from `lib/sync-trigger.ts` after commit. Full design: `docs/GRAPH_SYNC.md`. | A, B |
 | 2026-11-16 | Phase 5: added `GET /api/skills` and the `/me/profile` page (a resume is required to apply). Apply outcomes map to HTTP statuses as listed above. `lib/graph-queries.ts` exports `rankCandidatesForJob(jobId)` for the Phase 6 recruiter ranking. Candidate nav links were added to `app/layout.tsx` (A). | A, B |
 | 2026-11-16 | Phase 6: new MySQL trigger `trg_job_status_rules` (ARCHIVED is terminal; a job can't change recruiter). Added `GET /api/recruiter/jobs/:id`. `NEXT_STATUSES` in `lib/contracts.ts` mirrors the status trigger, for the UI only. Chart colours are the validated tokens `--color-series-1/2` in `globals.css`; B's `ScoreBar` was switched to them because the old blue/violet pair failed the colour-blind check. | A, B |
+| 2026-11-17 | Phase 7: admin routes added as above. Next.js upgraded 16.4.3 → **16.4.5** for GHSA-mfr8-8qww-v76h (`'use cache'` via `unstable_cache()`; we use neither, but `next build` refuses affected versions). `lib/errors.ts` (A) now gives readable 409 messages per UNIQUE constraint. Admin nav links added to `app/layout.tsx` (A). | A, B |

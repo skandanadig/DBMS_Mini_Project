@@ -25,7 +25,9 @@ const NAV_BY_ROLE: Record<Role, Array<{ href: string; label: string }>> = {
     { href: "/jobs", label: "Job board" },
   ],
   Admin: [
-    { href: "/admin", label: "Admin" },
+    { href: "/admin", label: "Overview" },
+    { href: "/admin/users", label: "Users" },
+    { href: "/admin/outbox", label: "Graph sync" },
     { href: "/jobs", label: "Job board" },
   ],
 };

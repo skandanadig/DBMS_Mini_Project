@@ -17,7 +17,7 @@ This folder contains the complete, production-ready database definitions for **S
 | [`mysql/06_tests.sql`](mysql/06_tests.sql) | 51 automated PASS/FAIL tests: constraints, triggers, procedures, rollback, outbox | Test suite |
 | [`docs/CONTRACTS.md`](docs/CONTRACTS.md) | Shared API/DB/graph contracts and Member A / Member B file ownership | Team agreement |
 | [`neo4j/schema_and_seed.cql`](neo4j/schema_and_seed.cql) | Constraints/indexes; idempotent `MERGE` seed mirrored from MySQL (skills, companies, candidates, jobs, `HAS_SKILL`, `REQUIRES_SKILL`, `OFFERED_BY`) plus graph-only `RELATED_TO`, `SUBSKILL_OF`, `WORKED_AT`, `CONNECTED_TO` | Graph (NoSQL) |
-| [`web/`](web/) | Next.js 16 app: API route handlers, JWT auth with RBAC in every route, MySQL pool + stored-procedure helper, Neo4j driver, Vitest integration tests | Web / API |
+| [`web/`](web/) | Next.js 16 (16.4.5) app: API route handlers, JWT auth with RBAC in every route, MySQL pool + stored-procedure helper, Neo4j driver, Vitest integration tests | Web / API |
 | [`neo4j/queries.cql`](neo4j/queries.cql) | 7 parameterised queries: skill gap, related-skill credit, graph ranking, referral path, job recommendations, supply/demand aggregation, learn-next | Graph (NoSQL) |
 
 ---
@@ -106,7 +106,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # pas
 cd web
 npm install          # web/.npmrc sets legacy-peer-deps (works around an npm 10.9 crash on vitest's optional peers)
 npm run dev          # http://localhost:3000
-npm test             # Vitest integration tests against the Docker MySQL + Neo4j (86 tests)
+npm test             # Vitest integration tests against the Docker MySQL + Neo4j (104 tests)
 npm run sync:graph   # apply pending MySQL changes to Neo4j, then verify both stores match
 npm run sync:graph -- --watch    # keep syncing every 5 s (handy during a demo)
 npm run sync:graph -- --full     # rebuild mirrored graph data from MySQL, then sync
@@ -123,3 +123,6 @@ Demo logins (password `Password@123`): `admin@skillmatch.io`, `sarah.j@techcorp.
 
 **Recruiter features** (sign in as `sarah.j@techcorp.com`):
 `/recruiter` (KPIs, per-job pipeline, hiring funnel from the audit trail, hard-to-fill skills) · `/recruiter/jobs/new` and `/recruiter/jobs/[id]/edit` (posting and skills in one transaction; MySQL CHECKs and triggers validate it) · `/recruiter/jobs/[id]/applicants` (applicants ranked with `RANK()`, status changes through `sp_update_application_status` with remarks, and the **SQL vs Neo4j ranking side by side**).
+
+**Admin features** (sign in as `admin@skillmatch.io`):
+`/admin` (platform counts, most demanded skills) · `/admin/users` (create **recruiter and admin accounts**, the only way these roles can be created) · `/admin/skills` (taxonomy, mirrored to Neo4j) · `/admin/audit` (trigger-written status history) · `/admin/outbox` (graph sync monitor: FAILED events, retry, "Sync now & verify").
