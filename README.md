@@ -1,128 +1,132 @@
-# SkillMatch Database Setup & Rubric Compliance Guide
+# SkillMatch: Intelligent Job & Skill Matching Platform
 
-This folder contains the complete, production-ready database definitions for **SkillMatch: Intelligent Job and Skill Matching Platform**, strictly designed according to the **PES University CSE DBMS Experiential Learning - Level 3 Project** specifications.
+A job and skill matching platform built on **MySQL 8** (transactions, integrity, audit trail) and **Neo4j 5** (skill graph, recommendations), with a **Next.js 16** web app for candidates, recruiters and admins.
+PES University · CSE · DBMS Experiential Learning, Level 3 Project.
 
----
+![Recruiter view: SQL vs graph ranking](docs/screenshots/recruiter-ranking.png)
 
-## 📁 File Structure
+**Highlights:**
+- Weighted skill matching computed in SQL (`fn_match_score`) **and** in the graph (related and more specific skills); the exact scores agree on all 240 job × candidate pairs.
+- A database-enforced application state machine, with an automatic audit trail written by triggers.
+- An ACID application procedure with row locking: 3 concurrent identical submits → exactly one succeeds.
+- A transactional outbox that keeps Neo4j in sync with MySQL: idempotent, ordered, verifiable.
+- Role-based access (Candidate / Recruiter / Admin) checked in **every** API route.
+- 51 SQL tests + 104 application tests, all passing.
 
-| File | Purpose | Paradigm |
-| :--- | :--- | :--- |
-| [`docker-compose.yml`](docker-compose.yml) | Local MySQL 8 + Neo4j 5 stack (schema + seed auto-load on first start) | Infra |
-| [`mysql/01_schema.sql`](mysql/01_schema.sql) | DDL, PK/FK, CHECK constraints, indexes, FULLTEXT, views, `fn_match_score`, 3 stored procedures, 26 triggers (business rules, audit, outbox) | Relational (SQL) |
-| [`mysql/02_seed_data.sql`](mysql/02_seed_data.sql) | 27 users, 6 companies, 26 skills, 15 jobs, 41 applications advanced through the stored procedure (password `Password@123`) | Relational (SQL) |
-| [`mysql/03_queries_and_tests.sql`](mysql/03_queries_and_tests.sql) | DML, JOINs, GROUP BY/HAVING, subqueries, views, procedures, window functions, CTEs, full-text search, SQL ranking | Demo queries |
-| [`mysql/04_alter_demo.sql`](mysql/04_alter_demo.sql) | `ALTER TABLE` / `ALTER VIEW` / `RENAME` / `DROP` on the live schema (self-reverting) | DDL demo |
-| [`mysql/05_performance.sql`](mysql/05_performance.sql) | `EXPLAIN ANALYZE` with vs without each index on 50k jobs / 100k applications; FULLTEXT vs `LIKE` | Performance |
-| [`mysql/06_tests.sql`](mysql/06_tests.sql) | 51 automated PASS/FAIL tests: constraints, triggers, procedures, rollback, outbox | Test suite |
-| [`docs/CONTRACTS.md`](docs/CONTRACTS.md) | Shared API/DB/graph contracts and Member A / Member B file ownership | Team agreement |
-| [`neo4j/schema_and_seed.cql`](neo4j/schema_and_seed.cql) | Constraints/indexes; idempotent `MERGE` seed mirrored from MySQL (skills, companies, candidates, jobs, `HAS_SKILL`, `REQUIRES_SKILL`, `OFFERED_BY`) plus graph-only `RELATED_TO`, `SUBSKILL_OF`, `WORKED_AT`, `CONNECTED_TO` | Graph (NoSQL) |
-| [`web/`](web/) | Next.js 16 (16.4.5) app: API route handlers, JWT auth with RBAC in every route, MySQL pool + stored-procedure helper, Neo4j driver, Vitest integration tests | Web / API |
-| [`neo4j/queries.cql`](neo4j/queries.cql) | 7 parameterised queries: skill gap, related-skill credit, graph ranking, referral path, job recommendations, supply/demand aggregation, learn-next | Graph (NoSQL) |
+## Documentation
 
----
+| Document | Contents |
+| :--- | :--- |
+| [`docs/PROJECT_REPORT.md`](docs/PROJECT_REPORT.md) | **Main report:** objectives, requirements, DB justification, implementation, important queries, architecture, screenshots, test results, conclusion, contributions |
+| [`docs/ER_DIAGRAM_AND_RELATIONAL_SCHEMA.md`](docs/ER_DIAGRAM_AND_RELATIONAL_SCHEMA.md) | ER diagram, relational schema, normalization, **data dictionary**, triggers and routines, graph model |
+| [`docs/GRAPH_SYNC.md`](docs/GRAPH_SYNC.md) | MySQL → Neo4j outbox design, guarantees, eventual consistency |
+| [`docs/RANKING_COMPARISON.md`](docs/RANKING_COMPARISON.md) | SQL vs Neo4j ranking, measured on all open jobs |
+| [`docs/CONTRACTS.md`](docs/CONTRACTS.md) | API route table, error format, DB/graph contracts, file ownership per member |
+| [`docs/screenshots/`](docs/screenshots/) | 17 screenshots of the running app |
 
-## 📋 Evaluation Rubric Checklist & Mapping
+## Repository layout
 
-| Rubric Requirement | Where It Is Implemented | Description |
-| :--- | :--- | :--- |
-| **SQL + NoSQL Paradigms** | MySQL + Neo4j | MySQL handles ACID transactions, relational integrity, auth, applications; Neo4j handles multi-hop skill ontology and recommendation graph. |
-| **ER Diagram & Relational Schema** | [`mysql/01_schema.sql`](mysql/01_schema.sql) | 3NF (redundant `jobs.company_id` removed; company derived via recruiter), PK/FK with `CASCADE/RESTRICT/SET NULL`, CHECK constraints. |
-| **DDL Statements** | `CREATE` / `DROP` in `01_schema.sql`, `ALTER` / `RENAME` / `DROP` in `04_alter_demo.sql` | Constraints, indexes, views. |
-| **DML Operations** | `INSERT`, `UPDATE`, `DELETE`, `SELECT` | Section A of `03_queries_and_tests.sql`. |
-| **JOIN, GROUP BY, HAVING, Subqueries** | Sections B, C, G of `03_queries_and_tests.sql` | Relational division, correlated subqueries, window functions, CTEs (incl. recursive). |
-| **Data validation at DB level** | CHECK, UNIQUE, FK, ENUM, triggers | Verified by `06_tests.sql` (51 PASS/FAIL tests). |
-| **SQL Concept 1: Transactions** | `sp_submit_application` | `START TRANSACTION`, `SELECT ... FOR UPDATE` on the job row, explicit `ROLLBACK` paths, exit handlers. |
-| **SQL Concept 2: Views** | `vw_job_listings`, `vw_recruiter_pipeline`, `vw_candidate_applications`, `vw_top_demanded_skills`, `vw_job_match_leaderboard` | Dashboards with joins, aggregation and `RANK()` window function. |
-| **SQL Concept 3: Triggers** | State machine, role/subtype integrity, insert defaults, audit trail, outbox | Business rules enforced in the database; audit metadata read from the row (pool-safe, no session variables). |
-| **SQL Concept 4: Stored Procedures & Functions** | `sp_submit_application`, `sp_update_application_status`, `sp_get_recruiter_analytics`, `fn_match_score` | OUT parameters, authorization checks, multiple result sets, weighted scoring function. |
-| **SQL Concept 5: Indexing** | Composite B-tree indexes + `EXPLAIN ANALYZE` in `05_performance.sql` | e.g. job feed 0.16 ms with index vs 16 ms full scan + filesort on 50k rows. |
-| **SQL Concept 6: Full-text search** | `ft_jobs_text`, `ft_candidates_profile` | Natural-language and boolean `MATCH ... AGAINST` (Section H). |
-| **MySQL → Neo4j sync** | `graph_sync_outbox` + triggers, worker `web/lib/graph-sync.ts` | Transactional outbox, single worker (advisory lock), ordered and idempotent replay, poison events parked as FAILED, full rebuild/verify. See [`docs/GRAPH_SYNC.md`](docs/GRAPH_SYNC.md). |
-| **NoSQL Concept 1: Graph Traversal** | `neo4j/queries.cql` Q2–Q5 | Variable-length `RELATED_TO*1..2` / `SUBSKILL_OF*1..2` traversal with path-weight products, `shortestPath` referrals, graph-enhanced ranking. |
-| **NoSQL Concept 2: Aggregation** | `neo4j/queries.cql` Q6–Q7 | `COUNT {}` / `COLLECT {}` subqueries, skill supply vs demand, category roll-up. |
-| **SQL vs Graph consistency** | Q3 `exactScore` vs MySQL `fn_match_score` | Identical for all 240 open-job × candidate pairs; `graphScore` adds credit for related/implied skills. |
-
----
-
-## 🚀 Execution Instructions
-
-### 0. Start the databases (Docker — recommended)
-```bash
-cp .env.example .env          # edit the passwords
-docker compose up -d          # MySQL runs 01_schema.sql + 02_seed_data.sql automatically on first start
-docker compose ps             # wait until both services show "healthy"
-
-# Run the demo/test queries inside the container
-docker compose exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -t < /scripts/03_queries_and_tests.sql'
-docker compose exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -t < /scripts/04_alter_demo.sql'
-docker compose exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -t < /scripts/05_performance.sql'
-docker compose exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -t < /scripts/06_tests.sql'   # expect: ALL TESTS PASSED
-
-# Reset everything (re-runs init scripts)
-docker compose down -v && docker compose up -d
+```
+docker-compose.yml   MySQL 8 + Neo4j 5 (schema + seed load automatically on first start)
+.env.example         configuration template - copy to .env (the only config file)
+mysql/               01_schema · 02_seed_data · 03_queries_and_tests · 04_alter_demo · 05_performance · 06_tests
+neo4j/               schema_and_seed.cql · queries.cql
+web/                 Next.js app: app/ (pages + API routes) · lib/ (data access, auth, sync) · tests/ (Vitest)
+docs/                report, schema, design notes, screenshots
 ```
 
-### 1. MySQL Execution (without Docker)
-You can run these scripts using **MySQL Workbench**, **phpMyAdmin**, or the **MySQL CLI**:
+## Setup and run
 
-```bash
-# Log in to MySQL (from the project directory)
-mysql -u root -p
+**Requirements:** Docker Desktop, Node.js ≥ 22.12.
+The commands below work in Windows `cmd` (use `cp` instead of `copy` on macOS/Linux).
 
-# 1. Run schema DDL (creates database, tables, triggers, procedures, views)
-source mysql/01_schema.sql;
+### 1. Configure
+```cmd
+copy .env.example .env
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+notepad .env
+```
+In `.env`, set your own passwords and paste the generated value as `JWT_SECRET=`. **This one root `.env` is used by Docker and by the web app.** There is no `web/.env`, and no credentials are in the source code.
 
-# 2. Populate realistic seed data
-source mysql/02_seed_data.sql;
-
-# 3. Test verification queries
-source mysql/03_queries_and_tests.sql;
+### 2. Start the databases
+```cmd
+docker compose up -d
+docker compose ps
+```
+Wait until both containers show **(healthy)**. MySQL runs `01_schema.sql` and `02_seed_data.sql` automatically. Then seed the graph once:
+```cmd
+docker compose exec neo4j sh -c "cypher-shell -u neo4j -p \"$SM_NEO4J_PASSWORD\" -f /scripts/schema_and_seed.cql"
 ```
 
-### 2. Neo4j Execution
-With Docker (the `neo4j/` folder is mounted at `/scripts`):
-
-```bash
-# Seed the graph (idempotent - safe to re-run)
-docker compose exec neo4j sh -c 'cypher-shell -u neo4j -p "$SM_NEO4J_PASSWORD" -f /scripts/schema_and_seed.cql'
-# Run all demo queries
-docker compose exec neo4j sh -c 'cypher-shell -u neo4j -p "$SM_NEO4J_PASSWORD" -f /scripts/queries.cql'
-```
-
-Or open **Neo4j Browser** at `http://localhost:7474` (user `neo4j`, password from `.env`), paste
-[`neo4j/schema_and_seed.cql`](neo4j/schema_and_seed.cql), then run the `:param` lines and any query from
-[`neo4j/queries.cql`](neo4j/queries.cql) to see the graph visualisation.
-
-### 3. Web app (Next.js 16)
-
-Requirements: **Node.js ≥ 22.12**, the databases running (step 0), and a real `JWT_SECRET` in the root `.env`:
-
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # paste into .env as JWT_SECRET=...
-```
-
-```bash
+### 3. Start the web app
+```cmd
 cd web
-npm install          # web/.npmrc sets legacy-peer-deps (works around an npm 10.9 crash on vitest's optional peers)
-npm run dev          # http://localhost:3000
-npm test             # Vitest integration tests against the Docker MySQL + Neo4j (104 tests)
-npm run sync:graph   # apply pending MySQL changes to Neo4j, then verify both stores match
-npm run sync:graph -- --watch    # keep syncing every 5 s (handy during a demo)
-npm run sync:graph -- --full     # rebuild mirrored graph data from MySQL, then sync
-npm run typecheck
-npm run build && npm start
+npm install
+npm run sync:graph
+npm run dev
 ```
+`npm run sync:graph` applies the pending MySQL changes to Neo4j and should end with `IN SYNC`. Then open **http://localhost:3000**. The health check is at http://localhost:3000/api/health.
 
-The app reads the **same root `.env`** as docker compose: there is no separate `web/.env`.
-Health check: `http://localhost:3000/api/health` (200 when MySQL and Neo4j are both reachable).
-Demo logins (password `Password@123`): `admin@skillmatch.io`, `sarah.j@techcorp.com` (recruiter), `rahul.sharma@gmail.com` (candidate).
+**Demo accounts** (password `Password@123`):
 
-**Candidate features** (sign in as `rahul.sharma@gmail.com` or `meera.joshi@gmail.com`):
-`/jobs` (full-text search, filters, sort by personal match) · `/jobs/[id]` (SQL vs graph match score, skill-gap table, related-skill paths, referral paths, apply through `sp_submit_application`) · `/me/recommendations` (Neo4j job recommendations and "learn next") · `/me/applications` (status timeline from the audit trigger) · `/me/skills` · `/me/profile` (a resume link is required to apply).
+| Role | Email | Try |
+| :--- | :--- | :--- |
+| Candidate | `meera.joshi@gmail.com` | *Jobs → Senior Full Stack Engineer*: SQL 60% vs graph 67%, skill gap, referral path |
+| Candidate | `rahul.sharma@gmail.com` | *For you*: graph recommendations and "learn next" |
+| Recruiter | `sarah.j@techcorp.com` | *Dashboard*, then a job's applicants: SQL vs graph ranking, move applicants through the pipeline |
+| Admin | `admin@skillmatch.io` | Create recruiter accounts, manage skills, audit log, *Graph sync → Sync now & verify* |
 
-**Recruiter features** (sign in as `sarah.j@techcorp.com`):
-`/recruiter` (KPIs, per-job pipeline, hiring funnel from the audit trail, hard-to-fill skills) · `/recruiter/jobs/new` and `/recruiter/jobs/[id]/edit` (posting and skills in one transaction; MySQL CHECKs and triggers validate it) · `/recruiter/jobs/[id]/applicants` (applicants ranked with `RANK()`, status changes through `sp_update_application_status` with remarks, and the **SQL vs Neo4j ranking side by side**).
+### 4. Run the tests and demo scripts
+```cmd
+docker compose exec mysql sh -c "mysql -uroot -p\"$MYSQL_ROOT_PASSWORD\" -t < /scripts/06_tests.sql"
+cd web
+npm test
+npm run typecheck
+cd ..
+```
+`06_tests.sql` should end with `51 | 0 | 51 | ALL TESTS PASSED`, and `npm test` with `Tests 104 passed (104)`. The tests expect the demo data: reset first (step 6) if you have changed data by hand.
 
-**Admin features** (sign in as `admin@skillmatch.io`):
-`/admin` (platform counts, most demanded skills) · `/admin/users` (create **recruiter and admin accounts**, the only way these roles can be created) · `/admin/skills` (taxonomy, mirrored to Neo4j) · `/admin/audit` (trigger-written status history) · `/admin/outbox` (graph sync monitor: FAILED events, retry, "Sync now & verify").
+Demo scripts, each printing tables:
+```cmd
+docker compose exec mysql sh -c "mysql -uroot -p\"$MYSQL_ROOT_PASSWORD\" -t < /scripts/03_queries_and_tests.sql"
+docker compose exec mysql sh -c "mysql -uroot -p\"$MYSQL_ROOT_PASSWORD\" -t < /scripts/04_alter_demo.sql"
+docker compose exec mysql sh -c "mysql -uroot -p\"$MYSQL_ROOT_PASSWORD\" -t < /scripts/05_performance.sql"
+docker compose exec neo4j sh -c "cypher-shell -u neo4j -p \"$SM_NEO4J_PASSWORD\" -f /scripts/queries.cql"
+```
+- `03_queries_and_tests.sql` runs the DML, joins, subqueries, window functions, full-text search and procedure demos. **It modifies data.**
+- `04_alter_demo.sql` demonstrates ALTER / RENAME / DROP and undoes its changes.
+- `05_performance.sql` runs EXPLAIN ANALYZE with and without each index.
+- `queries.cql` runs the 7 graph queries.
+
+### 5. Graph sync tools (in `web/`)
+| Command | Effect |
+| :--- | :--- |
+| `npm run sync:graph` | Apply pending changes, then verify graph = MySQL |
+| `npm run sync:graph -- --watch` | Keep syncing every 5 s (live demo) |
+| `npm run sync:graph -- --full` | Rebuild mirrored graph data from MySQL, then sync |
+| `npm run sync:graph -- --verify` / `--stats` | Compare only / outbox counts |
+
+### 6. Reset to the demo data
+```cmd
+docker compose down -v
+docker compose up -d
+```
+Then repeat the graph seed in step 2 and `npm run sync:graph` in step 3.
+
+## Troubleshooting
+| Problem | Fix |
+| :--- | :--- |
+| `failed to connect to the docker API` | Start Docker Desktop and wait for *Engine running* |
+| Port 3306 already in use | Docker MySQL uses host port **3307** by default (`MYSQL_PORT` in `.env`) |
+| `Invalid environment configuration … JWT_SECRET` | `JWT_SECRET` in `.env` must be at least 32 characters |
+| `/api/health` says `degraded` | Containers not healthy yet: `docker compose ps` |
+| `npm install` crashes with `edgesOut` | Use the provided `web/.npmrc`; npm ≥ 11 also works |
+| Graph panels empty or stale | `cd web` then `npm run sync:graph` |
+
+## Team
+| Member | Responsibilities |
+| :--- | :--- |
+| *Member A: name (SRN)* | MySQL schema, constraints, triggers, procedures, performance and SQL tests; auth and RBAC; recruiter features |
+| *Member B: name (SRN)* | Neo4j model and queries; outbox sync worker; candidate and admin features |
+
+Each phase was built on its own branch and merged with `--no-ff`; see `git log --graph` and the [contributions section of the report](docs/PROJECT_REPORT.md#13-individual-contributions).
