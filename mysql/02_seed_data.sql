@@ -323,6 +323,17 @@ CALL seed_advance_applications();
 DROP PROCEDURE seed_advance_applications;
 DROP TEMPORARY TABLE seed_application_targets;
 
+-- The triggers stamped every audit row with NOW(); spread each application's
+-- history out from its (back-dated) applied_date, 2 days per step, never in
+-- the future, so timelines read realistically. (Window function in a derived
+-- table: it is materialised, so updating the same table is allowed.)
+UPDATE application_audit_logs l
+JOIN (SELECT log_id,
+             ROW_NUMBER() OVER (PARTITION BY application_id ORDER BY log_id) - 1 AS step
+        FROM application_audit_logs) s ON s.log_id = l.log_id
+JOIN applications a ON a.application_id = l.application_id
+SET l.changed_at = LEAST(a.applied_date + INTERVAL (s.step * 2) DAY, NOW());
+
 -- Close / archive the historical postings now that their pipelines exist
 UPDATE jobs SET status = 'CLOSED'   WHERE job_id = 14;
 UPDATE jobs SET status = 'ARCHIVED' WHERE job_id = 15;
