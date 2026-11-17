@@ -114,7 +114,8 @@ export default function AdminUsersPage() {
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
 
       <div className="grid gap-6 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
+        {/* min-w-0: keep the table scrolling inside the card on mobile */}
+        <Card className="min-w-0 lg:col-span-3">
           <div className="mb-3 flex flex-wrap gap-2">
             <select aria-label="Filter by role" value={role} onChange={(e) => { setRole(e.target.value); setPage(1); }} className={inputCls}>
               <option value="">All roles</option>
