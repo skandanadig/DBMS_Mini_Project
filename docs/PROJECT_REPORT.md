@@ -121,14 +121,14 @@ The complete column-level dictionary (type, constraints, meaning for every colum
 | `03_queries_and_tests.sql` | DML (INSERT/UPDATE/DELETE/SELECT), JOINs, GROUP BY/HAVING, subqueries (relational division, correlated), views, procedures, window functions, CTEs (incl. recursive), FULLTEXT, SQL ranking |
 | `04_alter_demo.sql` | ALTER TABLE (add/modify/rename column, add/drop CHECK and index), ALTER VIEW, RENAME TABLE, DROP; self-reverting |
 | `05_performance.sql` | `EXPLAIN ANALYZE` with vs without each index on 50,000 jobs / 100,000 applications |
-| `06_tests.sql` | 51 self-checking PASS/FAIL tests |
+| `06_tests.sql` | 54 self-checking PASS/FAIL tests |
 
 **Advanced concepts (the PDF requires ≥ 4 for SQL):**
 
 | Concept | Implementation |
 | :--- | :--- |
 | **Transactions** | `sp_submit_application`: START TRANSACTION, `SELECT … FOR UPDATE` on the job row, explicit ROLLBACK paths, an exit handler for duplicate-key races. The app layer also uses multi-statement transactions (registration, profile update, job + skills) |
-| **Stored procedures and functions** | `sp_submit_application` (OUT status codes), `sp_update_application_status` (authorization inside the DB: owning recruiter or admin), `sp_get_recruiter_analytics` (two result sets), `fn_match_score` |
+| **Stored procedures and functions** | `sp_submit_application` (OUT status codes), `sp_update_application_status` (authorization inside the DB on rows locked within the same transaction: owning recruiter or admin), `sp_get_recruiter_analytics` (two result sets), `fn_match_score` |
 | **Triggers** | 27: state machine, subtype/role integrity, job lifecycle, DB-computed defaults, audit trail, outbox |
 | **Views** | `vw_job_listings`, `vw_recruiter_pipeline`, `vw_candidate_applications`, `vw_top_demanded_skills`, `vw_job_match_leaderboard` (window function) |
 | **Indexing** | Composite B-tree indexes matched to the app's queries, measured with EXPLAIN ANALYZE |
@@ -261,19 +261,19 @@ More: `home.png`, `job-board-search.png`, `candidate-skills.png`, `admin-users.p
 
 ## 11. Testing results
 
-### 11.1 Database test suite: `mysql/06_tests.sql`: **51 / 51 PASS**
+### 11.1 Database test suite: `mysql/06_tests.sql`: **54 / 54 PASS**
 Self-checking SQL: each failing statement runs inside a handler and the MySQL error number is compared.
 
 | Group | Tests | Covers |
 | :--- | ---: | :--- |
 | Constraints | 12 | CHECK (email, blank name, salary, score, experience, website), UNIQUE (email, job+candidate), FK (missing parent, RESTRICT ×2), ENUM |
 | Triggers | 14 | closed-job apply, subtype/role checks, immutable role/keys, state machine incl. terminal OFFERED, insert defaults, audit rows, job lifecycle (archived terminal, no recruiter transfer) |
-| Procedures / function | 17 | every `sp_submit_application` outcome, owner/admin/candidate/non-owner status changes, invalid status, `fn_match_score` |
+| Procedures / function | 20 | every `sp_submit_application` outcome, owner/admin/candidate/non-owner/unknown-actor status changes, invalid status, rejected updates write no audit rows, `fn_match_score` |
 | Transactions | 3 | failed submissions leave no rows; an explicit transaction with a failing 2nd statement rolls back the 1st and its trigger side effects |
 | Outbox | 4 | events written in-transaction, irrelevant changes emit nothing, deletes emit DELETE |
 | Cleanup | 1 | fixtures removed; suite is re-runnable |
 
-### 11.2 Application tests (Vitest, against the real databases): **104 / 104 PASS**
+### 11.2 Application tests (Vitest, against the real databases): **109 / 109 PASS**
 
 | File | Tests | Highlights |
 | :--- | ---: | :--- |
@@ -281,7 +281,7 @@ Self-checking SQL: each failing statement runs inside a handler and the MySQL er
 | `admin.test.ts` | 18 | RBAC on every admin route (200/403/403/401); recruiter creation → login → dashboard; unknown company → 422 with user row rolled back; taxonomy changes reach Neo4j |
 | `jobs.test.ts` | 16 | FULLTEXT prefix search; operator injection neutralised; filters; SQL score = graph exact score; referral path |
 | `constraints.test.ts` | 9 | CHECK / FK violations through the API → 422 and **whole transaction rolled back**; ARCHIVED terminal |
-| `db.test.ts` | 9 | OUT parameters never leak between pooled requests; concurrent CALLs isolated; failed CALL leaves no open transaction |
+| `db.test.ts` | 14 | OUT parameters never leak between pooled requests; concurrent CALLs isolated; failed CALL leaves no open transaction; **`sp_update_application_status` waits on locked job / user / application rows and serialises concurrent updates** |
 | `sync.test.ts` | 8 | **Replaying the entire outbox twice leaves the graph identical**; poison event blocks then is parked; single-worker lock; drift repaired by rebuild |
 | `recruiter.test.ts` | 7 | Dashboard figures; ranking (Kavya ▲, Karthik ▼); status change audited with remarks; invalid transition → 422 |
 | `procedures.test.ts` | 6 | Every apply outcome → HTTP status; **3 concurrent identical submits → exactly one 201** |

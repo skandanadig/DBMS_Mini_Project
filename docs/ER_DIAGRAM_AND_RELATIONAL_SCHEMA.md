@@ -310,7 +310,7 @@ stateDiagram-v2
 | :--- | :--- | :--- |
 | `fn_match_score(candidate, job)` | Function | Weighted skill match 0–100 (mandatory ×2; credit = min(candidate level ÷ required level, 1)) |
 | `sp_submit_application` | Procedure + transaction | Validates the candidate/resume and the job (`SELECT … FOR UPDATE`), checks for duplicates, inserts; OUT status code |
-| `sp_update_application_status` | Procedure + transaction | Validates the status and the actor (owning recruiter or admin), updates with remarks; the triggers audit it |
+| `sp_update_application_status` | Procedure + transaction | Validates the status; then, **inside the transaction**, locks users (S) → jobs (S) → applications (X) and checks the actor (owning recruiter or admin) on the locked rows before updating with remarks; the triggers audit it |
 | `sp_get_recruiter_analytics` | Procedure, 2 result sets | Per-job funnel (GROUP BY) + hard-to-fill skills (HAVING) |
 
 ---
