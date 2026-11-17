@@ -52,15 +52,16 @@ export default function AdminOverviewPage() {
             {data.topDemandedSkills.map((s) => (
               <li
                 key={s.skillId}
-                className="grid grid-cols-[8.5rem_1fr] items-center gap-3 text-sm"
+                className="grid grid-cols-[8.5rem_1fr_3rem] items-center gap-3 text-sm"
                 title={`${s.name}: required by ${s.demandingJobs} open jobs, mandatory in ${s.mandatoryIn}`}
               >
                 <span className="truncate text-slate-700">{s.name}</span>
-                <span className="flex items-center gap-2">
-                  <span className="h-3 rounded-r bg-series-1" style={{ width: `${(s.demandingJobs / maxDemand) * 100}%` }} />
-                  <span className="whitespace-nowrap font-medium">
-                    {s.demandingJobs} <span className="font-normal text-slate-500">({s.mandatoryIn})</span>
-                  </span>
+                {/* Full-width track so bar lengths stay proportional */}
+                <span className="block h-3 w-full">
+                  <span className="block h-3 rounded-r bg-series-1" style={{ width: `${(s.demandingJobs / maxDemand) * 100}%` }} />
+                </span>
+                <span className="whitespace-nowrap font-medium">
+                  {s.demandingJobs} <span className="font-normal text-slate-500">({s.mandatoryIn})</span>
                 </span>
               </li>
             ))}
